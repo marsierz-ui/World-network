@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Map, Marker, type MapLayerMouseEvent, type ViewState } from 'react-map-gl/maplibre';
 import { geocode } from '../../lib/geocode';
+import { useBasemap } from '../../lib/basemap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 interface Props {
   initial?: { lng: number; lat: number } | null;
@@ -14,6 +14,7 @@ interface Props {
 }
 
 export function LocationPicker({ initial, city, country, onConfirm, onCancel }: Props) {
+  const BASEMAP = useBasemap();
   const start =
     initial ?? geocode(city, country) ?? { lng: 10, lat: 25 };
   const [pin, setPin] = useState<{ lng: number; lat: number }>({ lng: start.lng, lat: start.lat });

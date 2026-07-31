@@ -18,8 +18,16 @@ export function MapPage() {
   const { data: tags = [] } = useTags();
   const { data: tagMap = {} } = useContactTagMap();
   const viewMode = useMapStore((s) => s.viewMode);
+  const categories = useMapStore((s) => s.categories);
+  const country = useMapStore((s) => s.country);
+  const tagId = useMapStore((s) => s.tagId);
   const [selected, setSelected] = useState<MapPoint | null>(null);
   const [mapKind, setMapKind] = useState<'flat' | 'globe'>('flat');
+  // The panel is tall enough to bury a phone screen, so start it collapsed there.
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 768);
+
+  const activeFilters =
+    (categories.size > 0 ? 1 : 0) + (country ? 1 : 0) + (tagId ? 1 : 0);
 
   const homeCountry = profile?.home_country ?? null;
 
@@ -53,6 +61,7 @@ export function MapPage() {
           key={`flat-${viewMode}-${homeCountry}`}
           points={points}
           initialView={initialView}
+          selected={selected}
           onSelect={setSelected}
         />
       ) : (
@@ -64,29 +73,51 @@ export function MapPage() {
         />
       )}
 
-      <div className="map-overlay-left">
-        <div className="view-toggle kind-toggle">
-          <button
-            className={mapKind === 'flat' ? 'seg active' : 'seg'}
-            onClick={() => setMapKind('flat')}
-          >
-            Flat
-          </button>
-          <button
-            className={mapKind === 'globe' ? 'seg active' : 'seg'}
-            onClick={() => setMapKind('globe')}
-          >
-            Globe
-          </button>
+      {panelOpen ? (
+        <div className="map-overlay-left">
+          <div className="overlay-head">
+            <strong>Map</strong>
+            <button
+              className="overlay-collapse"
+              onClick={() => setPanelOpen(false)}
+              aria-label="Hide filters"
+              title="Hide filters"
+            >
+              x
+            </button>
+          </div>
+          <div className="view-toggle kind-toggle">
+            <button
+              className={mapKind === 'flat' ? 'seg active' : 'seg'}
+              onClick={() => setMapKind('flat')}
+            >
+              Flat
+            </button>
+            <button
+              className={mapKind === 'globe' ? 'seg active' : 'seg'}
+              onClick={() => setMapKind('globe')}
+            >
+              Globe
+            </button>
+          </div>
+          <MapFilters tags={tags} countriesPresent={countriesPresent} />
+          <div className="map-stat">
+            {placed} placed
+            {unplaced > 0 && (
+              <> · <Link to="/contacts?unplaced=1">{unplaced} without location</Link></>
+            )}
+          </div>
         </div>
-        <MapFilters tags={tags} countriesPresent={countriesPresent} />
-        <div className="map-stat">
-          {placed} placed
-          {unplaced > 0 && (
-            <> · <Link to="/contacts?unplaced=1">{unplaced} without location</Link></>
-          )}
-        </div>
-      </div>
+      ) : (
+        <button
+          className="map-overlay-show"
+          onClick={() => setPanelOpen(true)}
+          aria-label="Show filters"
+        >
+          Filters
+          {activeFilters > 0 && <span className="filter-count">{activeFilters}</span>}
+        </button>
+      )}
 
       {selected && (
         <PointCard point={selected} tags={tags} onClose={() => setSelected(null)} />

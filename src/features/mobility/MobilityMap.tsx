@@ -4,10 +4,10 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, ArcLayer, TextLayer } from '@deck.gl/layers';
 import type { Contact } from '../../lib/database.types';
 import { CATEGORY_RGB } from '../map/mapIcons';
+import { useBasemap } from '../../lib/basemap';
 import type { Frame } from './mobilityData';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 function DeckOverlay(props: ConstructorParameters<typeof MapboxOverlay>[0]) {
   const overlay = useControl(() => new MapboxOverlay(props));
@@ -23,6 +23,7 @@ interface Props {
 }
 
 export function MobilityMap({ frame, showLabels, initialView, onSelect }: Props) {
+  const BASEMAP = useBasemap();
   const layers = useMemo(
     () => [
       new ArcLayer<Frame['arcs'][number]>({

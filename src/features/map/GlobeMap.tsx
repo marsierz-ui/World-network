@@ -9,9 +9,9 @@ import {
 import type { Contact, ContactCategory } from '../../lib/database.types';
 import type { MapPoint } from './useMapData';
 import { CATEGORY_HEX, makePinImage } from './mapIcons';
+import { useBasemap } from '../../lib/basemap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 interface Props {
   contacts: Contact[]; // filtered, with coords
@@ -22,6 +22,7 @@ interface Props {
 // Globe projection + MapLibre-native clustering (projects correctly on the sphere,
 // unlike a screen-space deck overlay).
 export function GlobeMap({ contacts, initialView, onSelect }: Props) {
+  const BASEMAP = useBasemap();
   const mapRef = useRef<MapRef | null>(null);
 
   const geojson = useMemo(

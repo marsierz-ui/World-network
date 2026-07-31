@@ -1,8 +1,11 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../features/auth/authContext';
+import { useTheme } from '../lib/theme';
 
 export function AppLayout() {
   const { signOut, session } = useAuth();
+  const theme = useTheme((s) => s.theme);
+  const toggleTheme = useTheme((s) => s.toggle);
   return (
     <div className="app-shell">
       <nav className="sidebar">
@@ -16,6 +19,14 @@ export function AppLayout() {
         <NavLink to="/import">Import</NavLink>
         <NavLink to="/settings">Settings</NavLink>
         <div className="spacer" />
+        <button
+          className="theme-btn"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
         <div className="user">{session?.user.email}</div>
         <button className="link" onClick={signOut}>Sign out</button>
       </nav>

@@ -3,12 +3,13 @@ import { Map as MapGL, Marker, Popup } from 'react-map-gl/maplibre';
 import { useContacts } from '../features/contacts/useContacts';
 import { useSocialFeed } from '../features/social/useSocialFeed';
 import type { SocialPost } from '../features/social/socialFeed';
+import { useBasemap } from '../lib/basemap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
 // Social posts surfaced as pop-ups on the map, anchored to each contact's location.
 export function FeedPage() {
+  const BASEMAP = useBasemap();
   const { data: contacts = [] } = useContacts();
   const { data: posts = [], isLoading, connectedCount } = useSocialFeed(contacts);
   const [openId, setOpenId] = useState<string | null>(null);
