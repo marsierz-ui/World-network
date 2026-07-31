@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
+import { setGoogleToken } from '../import/googleToken';
 import { AuthContext, type AuthState } from './authContext';
 
 // contacts.readonly lets the Google import read the People API later.
@@ -17,10 +18,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      // Present only on the load that handles the OAuth redirect.
+      if (data.session?.provider_token) setGoogleToken(data.session.provider_token);
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (s?.provider_token) setGoogleToken(s.provider_token);
+      if (event === 'SIGNED_OUT') setGoogleToken(null);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 

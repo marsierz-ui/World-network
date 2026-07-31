@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../auth/authContext';
 import { useProfile, useUpdateProfile } from '../profile/useProfile';
 import { fetchGoogleContacts } from './googleContacts';
+import { getGoogleToken } from './googleToken';
 import { useBulkImport } from './useImport';
 
 export function GoogleConnections() {
@@ -23,7 +24,9 @@ export function GoogleConnections() {
   async function syncNow() {
     setStatus('Checking Google connection...');
     const { data } = await supabase.auth.getSession();
-    const token = data.session?.provider_token;
+    // provider_token only survives the OAuth redirect itself; the stored copy
+    // covers every load after that.
+    const token = data.session?.provider_token ?? getGoogleToken();
     if (!token) {
       setStatus('Google not connected in this session. Click "Connect Google" and try again.');
       return;
@@ -38,7 +41,19 @@ export function GoogleConnections() {
       updateProfile.mutate({ google_last_synced: new Date().toISOString() });
       setStatus(`Synced: ${result.inserted} added, ${result.skipped} already present.`);
     } catch (e) {
-      setStatus(`Sync failed: ${(e as Error).message}`);
+      const msg = (e as Error).message;
+      // Google access tokens last about an hour; 403 usually means the People
+      // API is off in the Cloud project or the contacts scope was declined.
+      if (msg.includes('People API 401')) {
+        setStatus('Google session expired. Click "Connect Google" and sync again.');
+      } else if (msg.includes('People API 403')) {
+        setStatus(
+          'Google refused the request. Enable the People API in your Google Cloud project and ' +
+            'make sure you granted the contacts permission when connecting.',
+        );
+      } else {
+        setStatus(`Sync failed: ${msg}`);
+      }
     }
   }
 
@@ -63,6 +78,9 @@ export function GoogleConnections() {
           {bulk.isPending ? 'Syncing...' : 'Sync now'}
         </button>
       </div>
+      {!enabled && (
+        <div className="muted">Turn the switch on to enable syncing, then click Sync now.</div>
+      )}
       {status && <div className="muted">{status}</div>}
       <p className="muted small">
         Sync is on-demand (runs when you click, or right after connecting Google). Automatic
