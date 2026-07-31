@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+
+# Generated geocoding dataset (scripts/build-cities.mjs). Committed on purpose:
+# the deployed site fetches it at startup, and regenerating it in CI would make
+# every deploy depend on a GeoNames download.
+!public/cities.min.json
+.tmp-geonames
+
+# supabase local stack
+supabase/.branches
+supabase/.temp
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
