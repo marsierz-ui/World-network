@@ -4,6 +4,9 @@ Visualize your personal contact network on a world map. Maintain contacts with c
 import from Google and CSV (incl. LinkedIn exports), tag communities, and switch between a
 **cosmopolitan** (world) and **homelover** (home-country) view.
 
+**Live: https://marsierz-ui.github.io/World-network/** - always on, installable on a phone
+(Share -> Add to Home Screen on iOS, Install app on Android).
+
 This is Phase 1 (map + contacts foundation). Mobility-over-time, stats/gamification, and the
 social mode are planned for later phases.
 
@@ -17,28 +20,22 @@ social mode are planned for later phases.
 ## Prerequisites
 
 - Node 20+ (built on 24)
-- Docker (for the local Supabase stack)
-- Supabase CLI: `npm i -g supabase` or see https://supabase.com/docs/guides/cli
 
 ## Setup
 
+The app runs against a hosted Supabase project (`dioviawozcypzzowgoyk`, eu-west-3); no Docker
+or local stack is needed.
+
 ```bash
 npm install
-cp .env.example .env.local
-
-# Start the local Supabase stack (Postgres, Auth, Studio). Prints the anon key + URLs.
-supabase start
-
-# Apply the schema
-supabase db reset            # runs supabase/migrations/0001_init.sql
 ```
 
-Put the URL and anon key printed by `supabase start` into `.env.local`:
+`.env.local` already holds the project URL and anon key. The anon key is public by design -
+every table is protected by row-level security keyed on `auth.uid()`, so a signed-out key can
+read nothing.
 
-```
-VITE_SUPABASE_URL=http://localhost:54321
-VITE_SUPABASE_ANON_KEY=<anon key from `supabase start`>
-```
+If you ever point at a different project, copy `.env.example` to `.env.local`, fill in the two
+`VITE_` values from Project Settings -> API, and apply `supabase/migrations/*.sql` in order.
 
 ### Google sign-in + Contacts import (optional)
 
@@ -95,6 +92,27 @@ npx tsc -b --noEmit  # typecheck
 - Import: Google Contacts (People API), generic CSV, LinkedIn Connections.csv (auto-detected)
 - Per-contact location picker (search or click the map) for precise / missing locations
 - "Unplaced" filter on the contacts page to quickly find and fix contacts without coordinates
+- History: durable log of every contact added or removed, grouped by day, filterable by
+  action and searchable by name / email / place
+
+## Deployment
+
+Pushing to `main` builds and publishes to GitHub Pages via `.github/workflows/deploy.yml`.
+The site is served from `/World-network/`, so `vite.config.ts` sets that as the production
+`base` while dev stays on `/`; runtime paths use `import.meta.env.BASE_URL`.
+
+Two details worth knowing before changing the pipeline:
+
+- **`npm install`, not `npm ci`.** The committed lockfile is generated on Windows and pins
+  `@emnapi` at versions that do not satisfy the Linux wasm fallback rolldown resolves to, which
+  makes `npm ci` refuse to install. Regenerating the lockfile on Linux would let `npm ci` return.
+- **Deep links 404 by status.** GitHub Pages has no SPA rewrite, so the workflow copies
+  `index.html` to `404.html`. Refreshing `/history` serves the app shell and React Router
+  renders the right page; the HTTP status is still 404. Harmless, but it shows in logs.
+
+`.github/workflows/keepalive.yml` pings the database every 3 days, because free-tier Supabase
+projects pause after ~7 days of inactivity and a paused project takes the app down. Note that
+GitHub disables scheduled workflows in a repo with no activity for 60 days.
 
 ## Known limits (by design)
 
@@ -105,13 +123,15 @@ npx tsc -b --noEmit  # typecheck
 ## Project layout
 
 ```
-supabase/migrations/0001_init.sql   schema + PostGIS + RLS
+.github/workflows/                  Pages deploy + Supabase keepalive
+supabase/migrations/                schema + PostGIS + RLS, applied in order
 src/lib/                            supabase client, geocode, countries, cities, types
 src/features/auth/                  AuthProvider, LoginPage
 src/features/profile/               profile query/mutation
 src/features/contacts/              hooks, ContactForm, CustomFieldsManager
 src/features/tags/                  tag hooks, TagAssigner
 src/features/map/                   NetworkMap (deck.gl), filters, store, data shaping
+src/features/contacts/useContactHistory.ts  reads contact_events
 src/features/import/                CSV parse, Google People API, bulk import
 src/pages/                          Map, Contacts, Import, Settings
 scripts/build-cities.mjs            generate full geocoding dataset
