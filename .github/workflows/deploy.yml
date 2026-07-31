@@ -20,9 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 24 / npm 11 to match local dev. npm 10 rejects this lockfile over
+      # @emnapi optional-dep entries that rolldown only needs as a wasm fallback.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - run: npm ci
