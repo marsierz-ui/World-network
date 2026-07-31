@@ -27,7 +27,11 @@ jobs:
           node-version: 24
           cache: npm
 
-      - run: npm ci
+      # npm install, not npm ci: the lockfile is generated on Windows and pins
+      # @emnapi at versions that do not satisfy the Linux wasm fallback rolldown
+      # resolves to, which makes npm ci refuse to run. package.json ranges still
+      # constrain what gets installed.
+      - run: npm install --no-audit --no-fund
 
       - name: Build
         env:
