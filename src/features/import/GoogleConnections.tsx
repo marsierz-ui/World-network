@@ -34,12 +34,12 @@ export function GoogleConnections() {
     try {
       setStatus('Syncing contacts from Google...');
       const contacts = await fetchGoogleContacts(token);
-      const result = await bulk.mutateAsync({
-        items: contacts.map((input) => ({ input, labels: [] })),
-        source: 'google',
-      });
+      const result = await bulk.mutateAsync({ items: contacts, source: 'google' });
       updateProfile.mutate({ google_last_synced: new Date().toISOString() });
-      setStatus(`Synced: ${result.inserted} added, ${result.skipped} already present.`);
+      setStatus(
+        `Synced: ${result.inserted} added, ${result.skipped} already present` +
+          (result.tags > 0 ? `, ${result.tags} labels imported as tags.` : '.'),
+      );
     } catch (e) {
       const msg = (e as Error).message;
       // Google access tokens last about an hour; 403 usually means the People

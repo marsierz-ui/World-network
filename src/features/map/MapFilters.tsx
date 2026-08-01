@@ -1,6 +1,7 @@
 import type { ContactCategory } from '../../lib/database.types';
 import { COUNTRIES } from '../../lib/countries';
 import type { Tag } from '../../lib/database.types';
+import { ComboSelect } from '../../components/ComboSelect';
 import { useMapStore } from './mapStore';
 
 const CATEGORIES: ContactCategory[] = ['work', 'private', 'other'];
@@ -44,12 +45,13 @@ export function MapFilters({ tags, countriesPresent }: { tags: Tag[]; countriesP
 
       <div className="filter-group">
         <div className="section-label">Country</div>
-        <select value={country} onChange={(e) => setCountry(e.target.value)}>
-          <option value="">All countries</option>
-          {countryOptions.map((c) => (
-            <option key={c.code} value={c.code}>{c.name}</option>
-          ))}
-        </select>
+        <ComboSelect
+          options={countryOptions.map((c) => ({ value: c.code, label: c.name }))}
+          value={country}
+          onChange={setCountry}
+          emptyLabel="All countries"
+          placeholder="Search countries..."
+        />
       </div>
 
       <div className="filter-group">

@@ -7,6 +7,8 @@ export interface MapPoint {
   lat: number;
   contacts: Contact[];
   count: number;
+  /** null when the point's contacts have no country set. */
+  country: string | null;
 }
 
 // Group geocoded contacts by rounded coordinate so city-level points cluster naturally.
@@ -27,13 +29,22 @@ export function useMapData(contacts: Contact[], homeCountry: string | null) {
   const points = useMemo(() => {
     const map = new Map<string, MapPoint>();
     for (const c of filtered) {
-      const key = `${c.current_lng!.toFixed(2)},${c.current_lat!.toFixed(2)}`;
+      // Country is part of the key: two contacts can round to the same coordinate
+      // while living in different countries (border towns, or a mis-geocoded
+      // city name shared across countries). Merging them hides that.
+      const key = `${c.current_country ?? '?'}|${c.current_lng!.toFixed(2)},${c.current_lat!.toFixed(2)}`;
       const p = map.get(key);
       if (p) {
         p.contacts.push(c);
         p.count++;
       } else {
-        map.set(key, { lng: c.current_lng!, lat: c.current_lat!, contacts: [c], count: 1 });
+        map.set(key, {
+          lng: c.current_lng!,
+          lat: c.current_lat!,
+          contacts: [c],
+          count: 1,
+          country: c.current_country ?? null,
+        });
       }
     }
     return [...map.values()];

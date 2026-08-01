@@ -10,6 +10,7 @@ import {
   type ParsedCsv,
 } from '../features/import/parseCsv';
 import { fetchGoogleContacts } from '../features/import/googleContacts';
+import { getGoogleToken } from '../features/import/googleToken';
 import { fetchLinkedInConnections, linkedinRowsToItems, resolveActiveVersion } from '../features/import/linkedinPortability';
 import { useImportLinkedInSelf } from '../features/mobility/useLinkedInSelf';
 import { useBulkImport, type ImportSummary } from '../features/import/useImport';
@@ -127,7 +128,7 @@ function GoogleImport() {
     setStatus('Connecting to Google...');
     setSummary(null);
     const { data } = await supabase.auth.getSession();
-    const token = data.session?.provider_token;
+    const token = data.session?.provider_token ?? getGoogleToken();
     if (!token) {
       setStatus('No Google token in session. Reconnect Google to grant Contacts access.');
       return;
@@ -135,10 +136,7 @@ function GoogleImport() {
     try {
       setStatus('Fetching contacts from Google...');
       const contacts = await fetchGoogleContacts(token);
-      const result = await bulk.mutateAsync({
-        items: contacts.map((input) => ({ input, labels: [] })),
-        source: 'google',
-      });
+      const result = await bulk.mutateAsync({ items: contacts, source: 'google' });
       setSummary(result);
       setStatus(null);
     } catch (e) {

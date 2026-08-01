@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Contact, ContactCategory, FieldDefinition } from '../../lib/database.types';
 import { COUNTRIES } from '../../lib/countries';
+import { ComboSelect } from '../../components/ComboSelect';
 import { geocode } from '../../lib/geocode';
 import { PLATFORMS, searchUrl } from '../../lib/socials';
 import { LocationPicker } from './LocationPicker';
@@ -181,12 +182,13 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
 
 function CountrySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">--</option>
-      {COUNTRIES.map((c) => (
-        <option key={c.code} value={c.code}>{c.name}</option>
-      ))}
-    </select>
+    <ComboSelect
+      options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
+      value={value}
+      onChange={onChange}
+      emptyLabel="--"
+      placeholder="Search countries..."
+    />
   );
 }
 

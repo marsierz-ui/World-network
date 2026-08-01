@@ -165,6 +165,9 @@ export const COUNTRIES: Country[] = [
   { code: 'ZW', name: 'Zimbabwe', lat: -19.02, lng: 29.15 },
 ];
 
+// The literal above is maintained in ISO-code order; every dropdown wants names.
+COUNTRIES.sort((a, b) => a.name.localeCompare(b.name));
+
 export const COUNTRY_BY_CODE = new Map(COUNTRIES.map((c) => [c.code, c]));
 export const COUNTRY_BY_NAME = new Map(COUNTRIES.map((c) => [c.name.toLowerCase(), c]));
 

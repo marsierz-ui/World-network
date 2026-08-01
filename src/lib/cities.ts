@@ -7,6 +7,12 @@ export interface City {
   country: string; // ISO alpha-2
   lat: number;
   lng: number;
+  /** GeoNames population. Breaks ties between same-named cities; 0 when unknown. */
+  population?: number;
+  /** GeoNames admin1 code (state/province), for disambiguating within a country. */
+  admin1?: string;
+  /** Latin-script alternate spellings, e.g. Ulaanbaatar for "Ulan Bator". */
+  aliases?: string[];
 }
 
 export const CITIES: City[] = [

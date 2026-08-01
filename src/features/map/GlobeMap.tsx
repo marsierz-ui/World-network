@@ -6,10 +6,11 @@ import {
   type MapLayerMouseEvent,
   type MapRef,
 } from 'react-map-gl/maplibre';
-import type { Contact, ContactCategory } from '../../lib/database.types';
+import type { Contact } from '../../lib/database.types';
 import type { MapPoint } from './useMapData';
-import { CATEGORY_HEX, makePinImage } from './mapIcons';
+import { CATEGORY_HEX } from './mapIcons';
 import { useBasemap } from '../../lib/basemap';
+import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 
@@ -23,6 +24,7 @@ interface Props {
 // unlike a screen-space deck overlay).
 export function GlobeMap({ contacts, initialView, onSelect }: Props) {
   const BASEMAP = useBasemap();
+  const outline = useTheme((s) => (s.theme === 'light' ? '#ffffff' : '#0a0c10'));
   const mapRef = useRef<MapRef | null>(null);
 
   const geojson = useMemo(
@@ -56,7 +58,13 @@ export function GlobeMap({ contacts, initialView, onSelect }: Props) {
     const id = f.properties?.id as string;
     const c = contacts.find((x) => x.id === id);
     if (c) {
-      onSelect({ lng: c.current_lng!, lat: c.current_lat!, contacts: [c], count: 1 });
+      onSelect({
+        lng: c.current_lng!,
+        lat: c.current_lat!,
+        contacts: [c],
+        count: 1,
+        country: c.current_country ?? null,
+      });
     }
   }
 
@@ -65,17 +73,7 @@ export function GlobeMap({ contacts, initialView, onSelect }: Props) {
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={BASEMAP}
-      onLoad={(e) => {
-        const map = e.target;
-        map.setProjection({ type: 'globe' });
-        (['work', 'private', 'other'] as ContactCategory[]).forEach((cat) => {
-          const id = `pin-${cat}`;
-          if (map.hasImage(id)) return;
-          const c = makePinImage(CATEGORY_HEX[cat], 48);
-          const data = c.getContext('2d')!.getImageData(0, 0, c.width, c.height);
-          map.addImage(id, data, { pixelRatio: 2 });
-        });
-      }}
+      onLoad={(e) => e.target.setProjection({ type: 'globe' })}
       interactiveLayerIds={['clusters', 'unclustered']}
       onClick={handleClick}
       style={{ position: 'absolute', inset: 0 }}
@@ -107,20 +105,24 @@ export function GlobeMap({ contacts, initialView, onSelect }: Props) {
           layout={{ 'text-field': '{point_count_abbreviated}', 'text-size': 12 }}
           paint={{ 'text-color': '#ffffff' }}
         />
+        {/* Dots, matching the flat map. Pins covered the basemap below each
+            point and stacked into an unreadable mass in dense cities. */}
         <Layer
           id="unclustered"
-          type="symbol"
+          type="circle"
           filter={['!', ['has', 'point_count']]}
-          layout={{
-            'icon-image': [
+          paint={{
+            'circle-color': [
               'match', ['get', 'category'],
-              'work', 'pin-work',
-              'private', 'pin-private',
-              'pin-other',
+              'work', CATEGORY_HEX.work,
+              'private', CATEGORY_HEX.private,
+              CATEGORY_HEX.other,
             ],
-            'icon-size': 1,
-            'icon-anchor': 'bottom',
-            'icon-allow-overlap': true,
+            'circle-opacity': 0.7,
+            'circle-radius': 6,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': outline,
+            'circle-stroke-opacity': 0.9,
           }}
         />
       </Source>

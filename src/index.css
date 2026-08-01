@@ -372,6 +372,11 @@ button.danger { background: var(--danger); border-color: var(--danger); }
   .sidebar a { padding: 8px 12px; white-space: nowrap; font-size: 0.85em; }
   .sidebar button.link { margin-left: auto; white-space: nowrap; }
 
+  /* The toolbar is a flex row with five buttons; without wrapping, the search
+     input collapses to a few pixels and you cannot see what you type. */
+  .toolbar { flex-wrap: wrap; }
+  .toolbar .search-input { flex: 1 0 100%; }
+
   /* contacts: full-screen editor sheet, horizontally scrollable table */
   .contacts-layout { grid-template-columns: 1fr; }
   .side-panel { position: fixed; inset: 0; z-index: 40; }
@@ -507,3 +512,39 @@ button.danger { background: var(--danger); border-color: var(--danger); }
   .map-overlay-show { top: 10px; left: 10px; padding: 10px 16px; }
   .theme-btn { margin: 0 6px 0 0; }
 }
+
+/* ---- combo select (searchable single-select) ---- */
+.combo-select { position: relative; }
+.combo-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+}
+.combo-caret { color: var(--text-dim); font-size: 0.75em; }
+.combo-input { width: 100%; }
+.combo-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 260px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+.combo-opt {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left; background: none; border: none; color: var(--text);
+  padding: 7px 10px; border-radius: 6px; font-size: 0.9em;
+}
+.combo-opt:hover { background: var(--panel-2); }
+.combo-opt.active { color: var(--accent-2); }
+.combo-hint { color: var(--text-dim); font-size: 0.85em; }
+.combo-empty { padding: 8px 10px; }
+
+/* ---- location picker: ambiguous city matches ---- */
+.picker-matches { padding: 0 16px 12px; }
+.pm-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-height: 160px; overflow: auto; }
+.pm-opt {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  width: 100%; text-align: left; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 0.86em;
+}
+.pm-opt:hover { border-color: var(--accent); }

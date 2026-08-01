@@ -4,6 +4,7 @@ import { COUNTRIES } from '../lib/countries';
 import { LANGUAGES } from '../lib/languages';
 import { useTheme } from '../lib/theme';
 import { SearchSelect } from '../components/SearchSelect';
+import { ComboSelect } from '../components/ComboSelect';
 import { GoogleConnections } from '../features/import/GoogleConnections';
 import type { Profile } from '../lib/database.types';
 
@@ -88,12 +89,13 @@ function ProfileForm({ profile }: { profile: Profile }) {
       </label>
       <label>
         Home country <span className="muted">(pivot for cosmopolitan vs homelover)</span>
-        <select value={homeCountry} onChange={(e) => setHomeCountry(e.target.value)}>
-          <option value="">-- select --</option>
-          {COUNTRIES.map((c) => (
-            <option key={c.code} value={c.code}>{c.name}</option>
-          ))}
-        </select>
+        <ComboSelect
+          options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
+          value={homeCountry}
+          onChange={setHomeCountry}
+          emptyLabel="-- select --"
+          placeholder="Search countries..."
+        />
       </label>
       <label>
         Languages spoken <span className="muted">(search and select)</span>

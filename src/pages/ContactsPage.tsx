@@ -56,13 +56,19 @@ export function ContactsPage() {
   }
 
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
+    // Accent-insensitive so "Bilegt" matches "Bilégt" and vice versa.
+    const norm = (s: string) =>
+      s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+    const q = norm(query);
     return contacts.filter((c) => {
       if (unplacedOnly && c.current_lng != null && c.current_lat != null) return false;
+      if (!q) return true;
       return (
-        c.full_name.toLowerCase().includes(q) ||
-        (c.current_city ?? '').toLowerCase().includes(q) ||
-        (c.primary_email ?? '').toLowerCase().includes(q)
+        norm(c.full_name).includes(q) ||
+        norm(c.current_city ?? '').includes(q) ||
+        norm(c.primary_email ?? '').includes(q) ||
+        norm(c.phone ?? '').includes(q) ||
+        norm(c.notes ?? '').includes(q)
       );
     });
   }, [contacts, query, unplacedOnly]);
@@ -80,9 +86,16 @@ export function ContactsPage() {
       <div className="contacts-main">
         <div className="toolbar">
           <input
+            className="search-input"
             placeholder="Search name, city, email"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            // Phone keyboards otherwise capitalise and autocorrect names like
+            // "Bilegt" into something that matches nothing.
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck={false}
           />
           <button
             className={unplacedOnly ? 'toggle active' : 'toggle'}
@@ -153,7 +166,13 @@ export function ContactsPage() {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={8} className="muted">No contacts yet. Add one or import.</td></tr>
+                <tr>
+                  <td colSpan={8} className="muted">
+                    {contacts.length === 0
+                      ? 'No contacts yet. Add one or import.'
+                      : `No match for "${query}" among ${contacts.length} contacts.`}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
