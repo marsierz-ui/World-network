@@ -47,21 +47,35 @@ export function useBulkImport() {
       const { data: u } = await supabase.auth.getUser();
       const userId = u.user!.id;
 
-      const { data: existing } = await supabase.from('contacts').select('full_name,primary_email');
-      const seen = new Set(
-        (existing as Pick<Contact, 'full_name' | 'primary_email'>[] | null)?.map((c) =>
-          dedupeKey(c.full_name, c.primary_email),
-        ) ?? [],
-      );
+      const { data: existing } = await supabase
+        .from('contacts')
+        .select('id,full_name,primary_email');
+      // Keep the ids: a re-sync should still apply newly-added labels to
+      // contacts we already have, not drop them along with the duplicate row.
+      const existingIds = new Map<string, string>();
+      for (const c of (existing as Pick<Contact, 'id' | 'full_name' | 'primary_email'>[] | null) ??
+        []) {
+        existingIds.set(dedupeKey(c.full_name, c.primary_email), c.id);
+      }
+      const seen = new Set(existingIds.keys());
 
       // Dedupe, geocode, and keep labels aligned with the rows we will insert.
       const rows: Record<string, unknown>[] = [];
       const rowLabels: string[][] = [];
+      // Labels destined for contacts that already exist, keyed by contact id.
+      const existingLabels = new Map<string, string[]>();
       let skipped = 0;
       let placed = 0;
       for (const { input, labels } of items) {
         const key = dedupeKey(input.full_name, input.primary_email);
-        if (seen.has(key)) { skipped++; continue; }
+        if (seen.has(key)) {
+          skipped++;
+          const id = existingIds.get(key);
+          if (id && labels.length) {
+            existingLabels.set(id, [...(existingLabels.get(id) ?? []), ...labels]);
+          }
+          continue;
+        }
         seen.add(key);
         const g =
           input.current_lng != null && input.current_lat != null
@@ -87,7 +101,7 @@ export function useBulkImport() {
       }
 
       // Create/dedupe tags for all labels we are about to assign.
-      const uniqueLabels = [...new Set(rowLabels.flat())];
+      const uniqueLabels = [...new Set([...rowLabels.flat(), ...[...existingLabels.values()].flat()])];
       const tagMap = uniqueLabels.length ? await ensureTags(userId, uniqueLabels) : new Map();
 
       // Insert contacts in chunks, capturing ids in order to assign tags.
@@ -107,8 +121,21 @@ export function useBulkImport() {
         });
       }
 
+      for (const [contactId, labels] of existingLabels) {
+        for (const label of new Set(labels)) {
+          const tagId = tagMap.get(label.toLowerCase());
+          if (tagId) contactTags.push({ contact_id: contactId, tag_id: tagId, user_id: userId });
+        }
+      }
+
       for (let i = 0; i < contactTags.length; i += 1000) {
-        const { error } = await supabase.from('contact_tags').insert(contactTags.slice(i, i + 1000));
+        // Upsert: a contact already carrying the tag must not fail the batch.
+        const { error } = await supabase
+          .from('contact_tags')
+          .upsert(contactTags.slice(i, i + 1000), {
+            onConflict: 'contact_id,tag_id',
+            ignoreDuplicates: true,
+          });
         if (error) throw error;
       }
 
