@@ -89,6 +89,42 @@ export function geocodeCandidates(name?: string | null, country?: string | null)
 }
 
 /**
+ * Prefix/substring search over city names and aliases, biggest first.
+ * Powers the city autocomplete; matches are whole City records so the caller
+ * can adopt the country and exact coordinates along with the name.
+ */
+export function searchCities(query: string, limit = 8): City[] {
+  if (!index) buildIndex();
+  const q = normalize(query);
+  if (q.length < 2) return [];
+
+  const starts: City[] = [];
+  const contains: City[] = [];
+  for (const [key, list] of index!) {
+    if (key.startsWith(q)) {
+      starts.push(...list);
+    } else if (key.includes(q)) {
+      // Substring hits only count against the real name. Aliases match by
+      // prefix only, otherwise obscure transliterations leak in - Guangzhou
+      // carries "kuvanco", which would surface it for "vanco".
+      contains.push(...list.filter((c) => normalize(c.name).includes(q)));
+    }
+  }
+  starts.sort(byPopulation);
+  contains.sort(byPopulation);
+
+  const seen = new Set<City>();
+  const out: City[] = [];
+  for (const c of starts.concat(contains)) {
+    if (seen.has(c)) continue;
+    seen.add(c);
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
  * Resolve free-text city + country to coordinates.
  * City match wins; falls back to the country centroid; returns null if neither resolves.
  *

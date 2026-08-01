@@ -5,6 +5,8 @@ import { ComboSelect } from '../../components/ComboSelect';
 import { geocode } from '../../lib/geocode';
 import { PLATFORMS, searchUrl } from '../../lib/socials';
 import { LocationPicker } from './LocationPicker';
+import { CityAutocomplete } from './CityAutocomplete';
+import type { City } from '../../lib/cities';
 import type { ContactInput } from './useContacts';
 
 interface Props {
@@ -42,6 +44,14 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
   // Changing city/country invalidates a manual pin so geocoding re-runs.
   function changeCity(v: string) { setCity(v); setPin(null); }
   function changeCountry(v: string) { setCountry(v); setPin(null); }
+
+  // Picking a suggestion settles all three at once, so the saved coordinates
+  // cannot drift to a same-named city in another country.
+  function pickCity(c: City) {
+    setCity(c.name);
+    setCountry(c.country);
+    setPin({ lng: c.lng, lat: c.lat });
+  }
 
   const autoGeo = pin ? null : geocode(city || null, country || null);
   const locationLabel = pin
@@ -87,7 +97,7 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
       <div className="row">
         <label>
           Current city
-          <input value={city} onChange={(e) => changeCity(e.target.value)} />
+          <CityAutocomplete city={city} onCityChange={changeCity} onPick={pickCity} />
         </label>
         <label>
           Current country

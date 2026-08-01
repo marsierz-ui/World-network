@@ -548,3 +548,19 @@ button.danger { background: var(--danger); border-color: var(--danger); }
   border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 0.86em;
 }
 .pm-opt:hover { border-color: var(--accent); }
+
+/* ---- city autocomplete ---- */
+.city-auto { position: relative; }
+.city-menu {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 240px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+.city-opt {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  width: 100%; text-align: left; background: none; border: none; color: var(--text);
+  padding: 7px 10px; border-radius: 6px; font-size: 0.9em;
+}
+.city-opt:hover { background: var(--panel-2); }
+.city-name { font-weight: 500; }
