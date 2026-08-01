@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useContacts } from '../features/contacts/useContacts';
 import { useContactHistory, useClearContactHistory } from '../features/contacts/useContactHistory';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import type { ContactEvent, ContactEventAction, ContactSource } from '../lib/database.types';
@@ -36,7 +38,12 @@ function place(e: ContactEvent) {
 
 export function HistoryPage() {
   const { data: events = [], isLoading, error } = useContactHistory();
+  const { data: contacts = [] } = useContacts();
   const clear = useClearContactHistory();
+  const navigate = useNavigate();
+  // History outlives the contacts it describes, so only offer a link for the
+  // ones that still exist.
+  const liveIds = useMemo(() => new Set(contacts.map((c) => c.id)), [contacts]);
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
 
@@ -131,6 +138,15 @@ export function HistoryPage() {
               <span className="hist-name">{e.full_name}</span>
               <span className="hist-place muted">{place(e)}</span>
               {e.source && <span className="hist-source">{SOURCE_LABEL[e.source]}</span>}
+              {e.contact_id && liveIds.has(e.contact_id) && (
+                <button
+                  className="link hist-open"
+                  onClick={() => navigate(`/contacts?id=${e.contact_id}`)}
+                  title="Open this contact"
+                >
+                  view
+                </button>
+              )}
             </div>
           ))}
         </section>

@@ -23,6 +23,13 @@ function byPopulation(a: City, b: City) {
   return (b.population ?? 0) - (a.population ?? 0);
 }
 
+// Equirectangular approximation; accurate enough to answer "same place?".
+function roughKm(a: City, b: City) {
+  const dLat = (a.lat - b.lat) * 111;
+  const dLng = (a.lng - b.lng) * 111 * Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
+  return Math.hypot(dLat, dLng);
+}
+
 function buildIndex(extra: City[] = []) {
   const m = new Map<string, City[]>();
   const add = (key: string, c: City) => {
@@ -34,15 +41,31 @@ function buildIndex(extra: City[] = []) {
       m.set(key, [c]);
     }
   };
-  // The curated CITIES table overlaps the GeoNames set; collapse same
-  // name+country entries so the picker does not offer one place twice.
-  const merged = new Map<string, City>();
+  // The curated CITIES table overlaps the GeoNames set; collapse entries that
+  // are the same place, keeping the better-populated record. Sameness is by
+  // distance, not rounded coordinates: two records for one city can straddle a
+  // rounding boundary (Vancouver at 49.2497 vs 49.28) and survive as duplicates.
+  // Distinct cities sharing a name inside one country - Princeton NJ and
+  // Princeton FL, eight US Springfields - stay separate.
+  const byNameCountry = new Map<string, City[]>();
   for (const c of [...CITIES, ...extra]) {
     const key = `${normalize(c.name)}|${c.country}`;
-    const prev = merged.get(key);
-    if (!prev || (c.population ?? 0) > (prev.population ?? 0)) merged.set(key, c);
+    const list = byNameCountry.get(key);
+    if (list) list.push(c);
+    else byNameCountry.set(key, [c]);
   }
-  for (const c of merged.values()) {
+  const merged: City[] = [];
+  for (const list of byNameCountry.values()) {
+    const kept: City[] = [];
+    for (const c of list) {
+      const i = kept.findIndex((k) => roughKm(k, c) <= 25);
+      if (i === -1) kept.push(c);
+      else if ((c.population ?? 0) > (kept[i].population ?? 0)) kept[i] = c;
+    }
+    merged.push(...kept);
+  }
+
+  for (const c of merged) {
     add(normalize(c.name), c);
     for (const a of c.aliases ?? []) add(normalize(a), c);
   }

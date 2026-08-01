@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useContacts } from '../features/contacts/useContacts';
 import { useProfile } from '../features/profile/useProfile';
 import { useContactTagMap, useTags } from '../features/tags/useTags';
@@ -8,9 +8,10 @@ import { useMapStore } from '../features/map/mapStore';
 import { NetworkMap } from '../features/map/NetworkMap';
 import { GlobeMap } from '../features/map/GlobeMap';
 import { MapFilters } from '../features/map/MapFilters';
+import { MapSearch } from '../features/map/MapSearch';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import { SocialLinks } from '../features/contacts/SocialLinks';
-import type { Contact } from '../lib/database.types';
+import type { Contact, Tag } from '../lib/database.types';
 
 export function MapPage() {
   const { data: contacts = [] } = useContacts();
@@ -25,6 +26,7 @@ export function MapPage() {
   const [mapKind, setMapKind] = useState<'flat' | 'globe'>('flat');
   // The panel is tall enough to bury a phone screen, so start it collapsed there.
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 768);
+  const [focus, setFocus] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
 
   const activeFilters =
     (categories.size > 0 ? 1 : 0) + (country ? 1 : 0) + (tagId ? 1 : 0);
@@ -36,7 +38,7 @@ export function MapPage() {
     [contacts, tagMap],
   );
 
-  const { points, filtered } = useMapData(contactsWithTags, homeCountry);
+  const { points } = useMapData(contactsWithTags, homeCountry);
 
   const countriesPresent = useMemo(
     () => new Set(contacts.map((c) => c.current_country).filter(Boolean) as string[]),
@@ -54,6 +56,15 @@ export function MapPage() {
   const placed = points.reduce((n, p) => n + p.count, 0);
   const unplaced = contacts.length - placed;
 
+  // Jump to whatever the user picked in search and open its card.
+  function goToContact(c: Contact) {
+    const point = points.find((p) => p.contacts.some((x) => x.id === c.id));
+    if (point) {
+      setSelected(point);
+      setFocus({ lng: point.lng, lat: point.lat, zoom: 8 });
+    }
+  }
+
   return (
     <div className="map-page">
       {mapKind === 'flat' ? (
@@ -61,14 +72,17 @@ export function MapPage() {
           key={`flat-${viewMode}-${homeCountry}`}
           points={points}
           initialView={initialView}
+          focus={focus}
           selected={selected}
           onSelect={setSelected}
         />
       ) : (
         <GlobeMap
           key={`globe-${viewMode}-${homeCountry}`}
-          contacts={filtered}
+          points={points}
           initialView={initialView}
+          focus={focus}
+          selected={selected}
           onSelect={setSelected}
         />
       )}
@@ -86,6 +100,7 @@ export function MapPage() {
               x
             </button>
           </div>
+          <MapSearch contacts={contactsWithTags} tags={tags} onPick={goToContact} />
           <div className="view-toggle kind-toggle">
             <button
               className={mapKind === 'flat' ? 'seg active' : 'seg'}
@@ -114,7 +129,7 @@ export function MapPage() {
           onClick={() => setPanelOpen(true)}
           aria-label="Show filters"
         >
-          Filters
+          Search & filters
           {activeFilters > 0 && <span className="filter-count">{activeFilters}</span>}
         </button>
       )}
@@ -132,27 +147,37 @@ function PointCard({
   onClose,
 }: {
   point: MapPoint;
-  tags: { id: string; name: string }[];
+  tags: Tag[];
   onClose: () => void;
 }) {
+  const navigate = useNavigate();
   const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? id;
+  const place = [point.city, COUNTRY_BY_CODE.get(point.country ?? '')?.name ?? point.country]
+    .filter(Boolean)
+    .join(', ');
+
   return (
     <aside className="point-card">
       <div className="point-card-head">
-        <strong>
-          {point.contacts[0].current_city ?? 'Location'} · {point.count}
-        </strong>
+        <strong>{place || 'Location'} · {point.count}</strong>
         <button className="x" onClick={onClose}>x</button>
       </div>
       <ul>
         {point.contacts.map((c) => (
           <li key={c.id}>
             <span className={`dot ${c.category}`} />
-            {c.full_name}
+            <span className="pc-name">{c.full_name}</span>
             {(c as Contact & { tag_ids?: string[] }).tag_ids?.map((id) => (
               <span key={id} className="mini-tag">{tagName(id)}</span>
             ))}
             <SocialLinks socials={c.socials} />
+            <button
+              className="link pc-open"
+              onClick={() => navigate(`/contacts?id=${c.id}`)}
+              title="Open this contact"
+            >
+              view
+            </button>
           </li>
         ))}
       </ul>

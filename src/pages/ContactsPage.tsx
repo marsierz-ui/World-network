@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Contact, ContactCategory } from '../lib/database.types';
 import { COUNTRY_BY_CODE } from '../lib/countries';
@@ -54,6 +54,17 @@ export function ContactsPage() {
   function toggleUnplaced() {
     setParams(unplacedOnly ? {} : { unplaced: '1' });
   }
+
+  // Deep link from the map point card and the history page: /contacts?id=...
+  const openId = params.get('id');
+  useEffect(() => {
+    if (!openId) return;
+    const target = contacts.find((c) => c.id === openId);
+    if (target) {
+      setEditing(target);
+      setAdding(false);
+    }
+  }, [openId, contacts]);
 
   const filtered = useMemo(() => {
     // Accent-insensitive so "Bilegt" matches "Bilégt" and vice versa.

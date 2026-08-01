@@ -564,3 +564,23 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 }
 .city-opt:hover { background: var(--panel-2); }
 .city-name { font-weight: 500; }
+
+/* ---- map search ---- */
+.map-search { position: relative; margin-bottom: 14px; }
+.ms-results {
+  position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 300px; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+.ms-row {
+  display: flex; align-items: center; gap: 7px; width: 100%; text-align: left;
+  background: none; border: none; color: var(--text);
+  padding: 7px 9px; border-radius: 6px; font-size: 0.86em;
+}
+.ms-row:hover { background: var(--panel-2); }
+.ms-name { font-weight: 500; white-space: nowrap; }
+.ms-row .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-empty { padding: 8px 10px; }
+.pc-name { font-weight: 500; }
+.pc-open, .hist-open { margin-left: auto; flex: none; }
