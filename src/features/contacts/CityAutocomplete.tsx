@@ -56,7 +56,9 @@ export function CityAutocomplete({ city, onCityChange, onPick }: Props) {
           if (e.key === 'Enter' && open && matches[0]) {
             e.preventDefault();
             choose(matches[0]);
-          } else if (e.key === 'Escape') {
+          } else if (e.key === 'Escape' && open && matches.length > 0) {
+            // Swallow it: Escape closes the suggestion list, not the editor.
+            e.preventDefault();
             setOpen(false);
           }
         }}

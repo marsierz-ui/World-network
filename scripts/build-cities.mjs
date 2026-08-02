@@ -30,7 +30,7 @@ console.log(`Dataset: ${SET}`);
 console.log('Downloading', URL);
 const res = await fetch(URL);
 if (!res.ok) throw new Error(`download failed: ${res.status}`);
-await pipeline(Readable.fromWeb(res.body), createWriteStream(`${TMP}/cities15000.zip`));
+await pipeline(Readable.fromWeb(res.body), createWriteStream(`${TMP}/${SET}.zip`));
 
 // Unzip (relies on system unzip or PowerShell Expand-Archive on Windows).
 try {

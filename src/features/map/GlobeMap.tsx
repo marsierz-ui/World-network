@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-map-gl/maplibre';
-import type { ContactCategory } from '../../lib/database.types';
 import type { MapPoint } from './useMapData';
-import { CATEGORY_HEX } from './mapIcons';
 import { useBasemap } from '../../lib/basemap';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -13,12 +11,6 @@ interface Props {
   focus: { lng: number; lat: number; zoom: number } | null;
   selected: MapPoint | null;
   onSelect: (p: MapPoint | null) => void;
-}
-
-function dominantCategory(p: MapPoint): ContactCategory {
-  const counts: Record<string, number> = {};
-  for (const c of p.contacts) counts[c.category] = (counts[c.category] ?? 0) + 1;
-  return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] as ContactCategory) ?? 'other';
 }
 
 // Globe projection over the same aggregated points as the flat map. It used to
@@ -44,7 +36,7 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
           idx: i,
           count: p.count,
           label: p.count > 1 ? String(p.count) : '',
-          color: CATEGORY_HEX[dominantCategory(p)],
+          color: `rgb(${p.color.join(',')})`,
           radius: p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2,
         },
       })),

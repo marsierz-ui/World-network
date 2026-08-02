@@ -148,6 +148,21 @@ export function searchCities(query: string, limit = 8): City[] {
 }
 
 /**
+ * Cities whose name merely starts with the query, as a whole word: GeoNames
+ * stores "Hanau am Main", "Frankfurt am Main", "Freiburg im Breisgau", so the
+ * bare name people actually write matches nothing without this.
+ */
+function qualifiedNameMatches(q: string, countryCode?: string): City[] {
+  const out: City[] = [];
+  for (const [key, list] of index!) {
+    if (key.startsWith(`${q} `)) {
+      out.push(...(countryCode ? list.filter((c) => c.country === countryCode) : list));
+    }
+  }
+  return out.sort(byPopulation);
+}
+
+/**
  * Resolve free-text city + country to coordinates.
  * City match wins; falls back to the country centroid; returns null if neither resolves.
  *
@@ -161,7 +176,14 @@ export function geocode(city?: string | null, country?: string | null): GeoPoint
   const countryCode = countryHit?.code;
 
   if (city) {
-    const candidates = index!.get(normalize(city));
+    const q = normalize(city);
+    const candidates = index!.get(q);
+    if (!candidates?.length) {
+      const qualified = qualifiedNameMatches(q, countryCode);
+      if (qualified.length) {
+        return { lng: qualified[0].lng, lat: qualified[0].lat, precision: 'city' };
+      }
+    }
     if (candidates?.length) {
       if (countryCode) {
         const inCountry = candidates.find((c) => c.country === countryCode);

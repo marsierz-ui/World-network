@@ -584,3 +584,31 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .ms-empty { padding: 8px 10px; }
 .pc-name { font-weight: 500; }
 .pc-open, .hist-open { margin-left: auto; flex: none; }
+
+/* ---- label manager ---- */
+.label-manager { display: flex; flex-direction: column; gap: 10px; }
+.lm-group { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.lm-parent { display: flex; align-items: center; gap: 8px; }
+.lm-parent .link { margin-left: auto; }
+.lm-swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.lm-child { display: flex; align-items: center; gap: 8px; font-size: 0.88em; margin: 6px 0 0 18px; }
+.lm-color { width: 26px; height: 20px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; flex: none; }
+.lm-loose { display: flex; flex-wrap: wrap; gap: 10px; }
+.lm-loose .check { gap: 5px; }
+.lm-actions { display: flex; gap: 10px; align-items: center; }
+.lm-actions input { flex: 1; }
+.lm-actions button { white-space: nowrap; }
+
+/* ---- map legend ---- */
+.map-legend { margin-top: 12px; }
+.legend-row { display: flex; align-items: center; gap: 7px; font-size: 0.82em; margin-top: 4px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+/* ---- suggestion options ---- */
+.sugg-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.sugg-opt {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 10px; font-size: 0.82em;
+}
+.sugg-opt:hover { border-color: var(--accent); }
+.sugg-actions { margin-left: auto; display: flex; gap: 6px; }

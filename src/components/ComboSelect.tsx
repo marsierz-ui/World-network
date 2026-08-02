@@ -70,6 +70,8 @@ export function ComboSelect({ options, value, onChange, placeholder, emptyLabel 
               e.preventDefault();
               if (filtered[0]) pick(filtered[0].value);
             } else if (e.key === 'Escape') {
+              // Swallow it: Escape closes this dropdown, not the whole editor.
+              e.preventDefault();
               setOpen(false);
               setQuery('');
             }

@@ -55,6 +55,19 @@ export function ContactsPage() {
     setParams(unplacedOnly ? {} : { unplaced: '1' });
   }
 
+  // Escape closes the editor. Capture phase so a dropdown inside the form can
+  // still swallow Escape first when it needs to.
+  useEffect(() => {
+    if (!adding && !editing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      setAdding(false);
+      setEditing(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [adding, editing]);
+
   // Deep link from the map point card and the history page: /contacts?id=...
   const openId = params.get('id');
   useEffect(() => {

@@ -78,6 +78,8 @@ export interface Tag {
   name: string;
   kind: TagKind;
   color: string;
+  /** One level of nesting: sublabels point at their parent label. */
+  parent_id: string | null;
   created_at: string;
 }
 

@@ -38,7 +38,7 @@ export function MapPage() {
     [contacts, tagMap],
   );
 
-  const { points } = useMapData(contactsWithTags, homeCountry);
+  const { points, legend } = useMapData(contactsWithTags, homeCountry, tags);
 
   const countriesPresent = useMemo(
     () => new Set(contacts.map((c) => c.current_country).filter(Boolean) as string[]),
@@ -116,6 +116,17 @@ export function MapPage() {
             </button>
           </div>
           <MapFilters tags={tags} countriesPresent={countriesPresent} />
+          {legend.length > 0 && (
+            <div className="map-legend">
+              <div className="section-label">Sublabels</div>
+              {legend.map((t) => (
+                <div key={t.id} className="legend-row">
+                  <span className="legend-swatch" style={{ background: t.color }} />
+                  {t.name}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="map-stat">
             {placed} placed
             {unplaced > 0 && (

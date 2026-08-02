@@ -6,6 +6,7 @@ import { useTheme } from '../lib/theme';
 import { SearchSelect } from '../components/SearchSelect';
 import { ComboSelect } from '../components/ComboSelect';
 import { GoogleConnections } from '../features/import/GoogleConnections';
+import { LabelManager } from '../features/tags/LabelManager';
 import type { Profile } from '../lib/database.types';
 
 export function SettingsPage() {
@@ -20,6 +21,15 @@ export function SettingsPage() {
       ) : (
         <ProfileForm key={profile.user_id} profile={profile} />
       )}
+      <h2 className="conn-title">Labels</h2>
+      <div className="connection-card">
+        <div className="muted" style={{ marginBottom: 10 }}>
+          Group labels under a parent to see them together on the map, each sublabel in its
+          own colour.
+        </div>
+        <LabelManager />
+      </div>
+
       <h2 className="conn-title">Connections</h2>
       <GoogleConnections />
     </div>
