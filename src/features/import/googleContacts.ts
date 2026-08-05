@@ -1,15 +1,6 @@
 import type { ContactInput } from '../contacts/useContacts';
 import { findCountry } from '../../lib/countries';
-
-interface GooglePerson {
-  names?: { displayName?: string }[];
-  emailAddresses?: { value?: string }[];
-  phoneNumbers?: { value?: string }[];
-  biographies?: { value?: string }[];
-  addresses?: { city?: string; country?: string; countryCode?: string }[];
-  organizations?: { name?: string; title?: string }[];
-  memberships?: { contactGroupMembership?: { contactGroupResourceName?: string } }[];
-}
+import { PERSON_FIELDS, personToDetails, type GooglePerson } from './googlePerson';
 
 interface ConnectionsResponse {
   connections?: GooglePerson[];
@@ -22,9 +13,6 @@ interface ContactGroup {
   formattedName?: string;
   groupType?: string;
 }
-
-const FIELDS =
-  'names,emailAddresses,phoneNumbers,biographies,addresses,organizations,memberships';
 
 /**
  * Google labels are "contact groups". A person only carries group resource
@@ -70,7 +58,7 @@ export async function fetchGoogleContacts(accessToken: string): Promise<GoogleCo
 
   do {
     const url = new URL('https://people.googleapis.com/v1/people/me/connections');
-    url.searchParams.set('personFields', FIELDS);
+    url.searchParams.set('personFields', PERSON_FIELDS);
     url.searchParams.set('pageSize', '1000');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
@@ -83,12 +71,13 @@ export async function fetchGoogleContacts(accessToken: string): Promise<GoogleCo
     for (const p of data.connections ?? []) {
       const name = p.names?.[0]?.displayName;
       if (!name) continue;
-      const addr = p.addresses?.[0];
-      const org = p.organizations?.[0];
-      const country = addr?.countryCode || findCountry(addr?.country)?.code || null;
-      const custom: Record<string, unknown> = {};
-      if (org?.name) custom.company = org.name;
-      if (org?.title) custom.position = org.title;
+
+      const details = personToDetails(p);
+      // The scalar columns are the app's own view of the first entry: the map,
+      // search, dedupe and contacts table all read them, not the lists.
+      const addr = details.addresses?.[0];
+      const country =
+        addr?.country || findCountry(p.addresses?.[0]?.country)?.code || null;
 
       const labels = (p.memberships ?? [])
         .map((m) => m.contactGroupMembership?.contactGroupResourceName)
@@ -98,15 +87,19 @@ export async function fetchGoogleContacts(accessToken: string): Promise<GoogleCo
       out.push({
         input: {
           full_name: name,
-          primary_email: p.emailAddresses?.[0]?.value ?? null,
-          phone: p.phoneNumbers?.[0]?.value ?? null,
+          primary_email: details.emails?.[0]?.value ?? null,
+          phone: details.phones?.[0]?.value ?? null,
           notes: p.biographies?.[0]?.value ?? null,
-          current_city: addr?.city ?? null,
+          current_city: addr?.city || null,
           current_country: country,
           origin_country: null,
           category: 'other',
-          custom,
+          custom: {},
+          details,
           source: 'google',
+          // Keeps the link back to the Google contact so later edits can be
+          // pushed to it.
+          external_ids: p.resourceName ? { google: p.resourceName } : {},
         },
         labels,
       });

@@ -4,8 +4,9 @@ import { supabase } from '../../lib/supabase';
 import { setGoogleToken } from '../import/googleToken';
 import { AuthContext, type AuthState } from './authContext';
 
-// contacts.readonly lets the Google import read the People API later.
-const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/contacts.readonly';
+// Full contacts scope, not contacts.readonly: the import reads the People API,
+// and edits saved here are written back to Google (see googlePush.ts).
+const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/contacts';
 
 // origin alone drops the subpath on GitHub Pages, sending auth redirects to
 // https://marsierz-ui.github.io/ instead of .../World-network/. BASE_URL is

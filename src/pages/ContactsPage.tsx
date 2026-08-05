@@ -18,6 +18,7 @@ import {
   useFieldDefinitions,
   useUpdateContact,
   type ContactInput,
+  type UpdateResult,
 } from '../features/contacts/useContacts';
 
 export function ContactsPage() {
@@ -98,9 +99,13 @@ export function ContactsPage() {
   }, [contacts, query, unplacedOnly]);
 
   function handleSubmit(input: ContactInput) {
+    // Reset the other mutation so the Google note below always reflects the
+    // action that just ran, not a stale one.
     if (editing) {
+      create.reset();
       update.mutate({ id: editing.id, input }, { onSuccess: () => setEditing(null) });
     } else {
+      update.reset();
       create.mutate(input, { onSuccess: () => setAdding(false) });
     }
   }
@@ -142,6 +147,10 @@ export function ContactsPage() {
             {delAll.isPending ? 'Clearing...' : 'Clear all'}
           </button>
         </div>
+
+        {(update.data ?? create.data) && (
+          <GoogleSyncNote result={(update.data ?? create.data)!} />
+        )}
 
         <SuggestionsPanel contacts={contacts} />
 
@@ -224,6 +233,28 @@ export function ContactsPage() {
       {merging && <MergeDuplicates contacts={contacts} onClose={() => setMerging(false)} />}
     </div>
   );
+}
+
+// Only outcomes the user can act on are shown. A contact that never came from
+// Google, or a run with the sync switch off, stays quiet.
+function GoogleSyncNote({ result }: { result: UpdateResult }) {
+  if (result.google === 'failed') {
+    return <div className="error">Saved here, but Google was not updated: {result.googleError}</div>;
+  }
+  if (result.google === 'updated') {
+    return <div className="muted">Pushed to Google Contacts.</div>;
+  }
+  if (result.google === 'created') {
+    return <div className="muted">Created in Google Contacts.</div>;
+  }
+  if (result.google === 'no-token') {
+    return (
+      <div className="muted">
+        Saved here. Reconnect Google on the Settings page to push edits to Google Contacts.
+      </div>
+    );
+  }
+  return null;
 }
 
 function InlineNotes({ contact, onSave }: { contact: Contact; onSave: (notes: string | null) => void }) {

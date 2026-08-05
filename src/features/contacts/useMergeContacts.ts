@@ -15,6 +15,8 @@ export function useMergeContacts() {
       (['primary_email', 'phone', 'notes', 'origin_country', 'current_city', 'current_country', 'current_lng', 'current_lat', 'avatar_url'] as (keyof Contact)[]).forEach(fill);
       patch.socials = { ...dup.socials, ...survivor.socials };
       patch.custom = { ...dup.custom, ...survivor.custom };
+      patch.details = { ...dup.details, ...survivor.details };
+      patch.external_ids = { ...dup.external_ids, ...survivor.external_ids };
       if (Object.keys(patch).length) {
         const { error } = await supabase.from('contacts').update(patch).eq('id', survivor.id);
         if (error) throw error;

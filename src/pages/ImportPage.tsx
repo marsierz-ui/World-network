@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../features/auth/authContext';
 import {
   autoMap,
@@ -9,8 +8,8 @@ import {
   type MapTarget,
   type ParsedCsv,
 } from '../features/import/parseCsv';
-import { fetchGoogleContacts } from '../features/import/googleContacts';
-import { getGoogleToken } from '../features/import/googleToken';
+import { ReimportPrompt } from '../features/import/ReimportPrompt';
+import { useGoogleSync } from '../features/import/useGoogleSync';
 import { fetchLinkedInConnections, linkedinRowsToItems, resolveActiveVersion } from '../features/import/linkedinPortability';
 import { useImportLinkedInSelf } from '../features/mobility/useLinkedInSelf';
 import { useBulkImport, type ImportSummary } from '../features/import/useImport';
@@ -120,48 +119,28 @@ function LinkedInImport() {
 
 function GoogleImport() {
   const { signInWithGoogle } = useAuth();
-  const bulk = useBulkImport();
-  const [status, setStatus] = useState<string | null>(null);
-  const [summary, setSummary] = useState<ImportSummary | null>(null);
-
-  async function run() {
-    setStatus('Connecting to Google...');
-    setSummary(null);
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.provider_token ?? getGoogleToken();
-    if (!token) {
-      setStatus('No Google token in session. Reconnect Google to grant Contacts access.');
-      return;
-    }
-    try {
-      setStatus('Fetching contacts from Google...');
-      const contacts = await fetchGoogleContacts(token);
-      const result = await bulk.mutateAsync({ items: contacts, source: 'google' });
-      setSummary(result);
-      setStatus(null);
-    } catch (e) {
-      setStatus(`Failed: ${(e as Error).message}`);
-    }
-  }
+  const sync = useGoogleSync();
 
   return (
     <section className="import-card">
       <h3>Google Contacts</h3>
       <p className="muted">
-        Pulls your Google connections via the People API. Requires the contacts.readonly scope
-        granted at sign-in.
+        Pulls your Google connections via the People API. Requires the contacts scope granted at
+        sign-in.
       </p>
       <div className="actions-row">
-        <button onClick={run} disabled={bulk.isPending}>Import from Google</button>
+        <button onClick={sync.run} disabled={sync.busy}>Import from Google</button>
         <button className="link" onClick={signInWithGoogle}>Reconnect Google</button>
       </div>
-      {status && <div className="muted">{status}</div>}
-      {bulk.isError && <div className="error">Import failed: {(bulk.error as Error).message}</div>}
-      {summary && (
+      {sync.status && <div className="muted">{sync.status}</div>}
+      {sync.summary && (
         <div className="summary">
-          Imported {summary.inserted} ({summary.placed} placed on map), skipped {summary.skipped}{' '}
-          duplicates, {summary.tags} tags from labels.
+          Imported {sync.summary.inserted} ({sync.summary.placed} placed on map), skipped{' '}
+          {sync.summary.skipped} duplicates, {sync.summary.tags} tags from labels.
         </div>
+      )}
+      {sync.pending && (
+        <ReimportPrompt deleted={sync.pending} onConfirm={sync.confirm} onCancel={sync.cancel} />
       )}
     </section>
   );

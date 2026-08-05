@@ -37,10 +37,11 @@ read nothing.
 If you ever point at a different project, copy `.env.example` to `.env.local`, fill in the two
 `VITE_` values from Project Settings -> API, and apply `supabase/migrations/*.sql` in order.
 
-### Google sign-in + Contacts import (optional)
+### Google sign-in + Contacts sync (optional)
 
 1. Create an OAuth client in Google Cloud Console (Web), scope
-   `https://www.googleapis.com/auth/contacts.readonly`.
+   `https://www.googleapis.com/auth/contacts` (read/write - `contacts.readonly` imports fine but
+   cannot push edits back).
 2. Authorized redirect URI: `http://localhost:54321/auth/v1/callback`.
 3. Export before `supabase start`:
    ```bash
@@ -49,6 +50,33 @@ If you ever point at a different project, copy `.env.example` to `.env.local`, f
    ```
 
 Without this, email/password auth and CSV import still work.
+
+#### Two-way sync
+
+Import stores each Google contact's `resourceName` in `contacts.external_ids.google`. While the
+sync switch on the Settings page is on:
+
+- adding a contact creates it in Google (`people.createContact`) and stores the returned link
+- editing a linked contact PATCHes it (`people.updateContact`)
+- deleting a contact here never touches Google
+
+`contacts.details` (migration 0008) holds everything the Google Contacts editor can hold that has
+no column of its own: structured name parts, nickname, file-as, birthday, organizations, and the
+repeatable labelled lists (emails, phones, postal addresses, websites, chats, related people,
+significant dates, custom fields). `src/features/import/googlePerson.ts` is the single place that
+maps it to and from a People API `Person`. `primary_email` and `phone` stay as columns because
+dedupe, search and the map read them; they are derived from the first list entry on every save.
+
+Guardrails:
+
+- Only fields holding a value are pushed. Clearing a field here does not clear it in Google, and
+  contacts that predate `details` (almost every key missing) cannot wipe the Google copy.
+- The person is re-read before each write, both for the etag `updateContact` requires and to skip
+  fields that already match, so a save that changed nothing sends no request.
+- Deleting here does not delete in Google, so the contact comes back on the next pull. Every such
+  contact is listed in a prompt for an explicit yes or no first. Nothing is remembered - you are
+  asked again next sync, because the answer lives in Google and can change there.
+- Contacts imported before the link existed get adopted on the next sync.
 
 ### City geocoding
 
@@ -90,6 +118,8 @@ npx tsc -b --noEmit  # typecheck
 - Filters: category, country, tag/community
 - Tags/communities with assignment per contact
 - Import: Google Contacts (People API), generic CSV, LinkedIn Connections.csv (auto-detected)
+- Two-way Google sync: contacts added or edited here are created/updated in Google; the contact
+  editor carries Google's full field set (see below)
 - Per-contact location picker (search or click the map) for precise / missing locations
 - "Unplaced" filter on the contacts page to quickly find and fix contacts without coordinates
 - History: durable log of every contact added or removed, grouped by day, filterable by

@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import type { ContactInput } from '../contacts/useContacts';
-import type { ContactSource } from '../../lib/database.types';
+import type { ContactDetails, ContactSource } from '../../lib/database.types';
 import { geocode } from '../../lib/geocode';
 import { findCountry, findCountryByNameOnly } from '../../lib/countries';
 
@@ -188,9 +188,16 @@ export function rowsToContacts(
       acc.full_name || [acc.first_name, acc.last_name].filter(Boolean).join(' ').trim();
     if (!fullName) continue;
 
-    const custom: Record<string, unknown> = {};
-    if (acc.company) custom.company = acc.company;
-    if (acc.position) custom.position = acc.position;
+    // Company/title are Google organization fields, so they go in `details`
+    // alongside everything else the sync knows how to push.
+    const details: ContactDetails = {};
+    if (acc.company || acc.position) {
+      details.organizations = [
+        { name: acc.company ?? '', title: acc.position ?? '', department: '' },
+      ];
+    }
+    if (acc.email) details.emails = [{ label: '', value: acc.email }];
+    if (acc.phone) details.phones = [{ label: '', value: acc.phone }];
 
     const labels = parseLabels(acc.labels);
     const notes = acc.notes ?? null;
@@ -214,7 +221,8 @@ export function rowsToContacts(
         current_country: country,
         origin_country: acc.origin_country ?? null,
         category: source === 'linkedin_csv' ? 'work' : 'other',
-        custom,
+        custom: {},
+        details,
         source,
       },
     });

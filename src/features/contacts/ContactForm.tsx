@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import type { Contact, ContactCategory, FieldDefinition } from '../../lib/database.types';
+import type {
+  Contact,
+  ContactAddress,
+  ContactCategory,
+  ContactDetails,
+  ContactOrganization,
+  FieldDefinition,
+  LabeledValue,
+} from '../../lib/database.types';
 import { COUNTRIES } from '../../lib/countries';
 import { ComboSelect } from '../../components/ComboSelect';
 import { geocode } from '../../lib/geocode';
@@ -19,23 +27,83 @@ interface Props {
 
 const CATEGORIES: ContactCategory[] = ['work', 'private', 'other'];
 
+// Google's own label sets. They are suggestions, not a closed list - the People
+// API takes any string as a type, and so does the Google Contacts editor.
+const EMAIL_LABELS = ['home', 'work', 'other'];
+const PHONE_LABELS = ['mobile', 'home', 'work', 'main', 'workFax', 'homeFax', 'pager', 'other'];
+const ADDRESS_LABELS = ['home', 'work', 'other'];
+const URL_LABELS = ['homePage', 'blog', 'profile', 'work', 'other'];
+const CHAT_LABELS = ['googleTalk', 'skype', 'jabber', 'qq', 'icq', 'aim', 'msn', 'netMeeting'];
+const RELATION_LABELS = [
+  'spouse', 'child', 'mother', 'father', 'parent', 'brother', 'sister', 'friend',
+  'relative', 'domesticPartner', 'manager', 'assistant', 'referredBy', 'partner',
+];
+const EVENT_LABELS = ['anniversary', 'other'];
+
+const DATE_HINT = 'YYYY-MM-DD (or --MM-DD)';
+
+/**
+ * Contacts that predate the `details` column, or came from CSV, hold their only
+ * email and phone in the scalar columns. Seed the lists from them so opening
+ * the form does not look like the data vanished.
+ */
+function seedDetails(initial?: Contact): ContactDetails {
+  const d: ContactDetails = { ...(initial?.details ?? {}) };
+  if (!d.emails?.length && initial?.primary_email) {
+    d.emails = [{ label: '', value: initial.primary_email }];
+  }
+  if (!d.phones?.length && initial?.phone) {
+    d.phones = [{ label: '', value: initial.phone }];
+  }
+  return d;
+}
+
+function cleanDetails(d: ContactDetails): ContactDetails {
+  const keepValue = (r: LabeledValue) => r.value.trim() !== '';
+  const out: ContactDetails = {
+    ...d,
+    emails: d.emails?.filter(keepValue),
+    phones: d.phones?.filter(keepValue),
+    urls: d.urls?.filter(keepValue),
+    chats: d.chats?.filter(keepValue),
+    relations: d.relations?.filter(keepValue),
+    events: d.events?.filter(keepValue),
+    user_defined: d.user_defined?.filter((r) => r.label.trim() || r.value.trim()),
+    organizations: d.organizations?.filter((o) => o.name.trim() || o.title.trim() || o.department.trim()),
+    addresses: d.addresses?.filter(
+      (a) => a.street.trim() || a.city.trim() || a.region.trim() || a.postal_code.trim() || a.country,
+    ),
+  };
+  // Empty keys are noise in every sync payload and diff.
+  for (const [k, v] of Object.entries(out)) {
+    if (v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) {
+      delete out[k as keyof ContactDetails];
+    }
+  }
+  return out;
+}
+
 export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props) {
   const [fullName, setFullName] = useState(initial?.full_name ?? '');
-  const [email, setEmail] = useState(initial?.primary_email ?? '');
   const [originCountry, setOriginCountry] = useState(initial?.origin_country ?? '');
-  const [phone, setPhone] = useState(initial?.phone ?? '');
   const [city, setCity] = useState(initial?.current_city ?? '');
   const [country, setCountry] = useState(initial?.current_country ?? '');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [category, setCategory] = useState<ContactCategory>(initial?.category ?? 'other');
   const [custom, setCustom] = useState<Record<string, unknown>>(initial?.custom ?? {});
   const [socials, setSocials] = useState<Record<string, string>>(initial?.socials ?? {});
+  const [details, setDetails] = useState<ContactDetails>(() => seedDetails(initial));
+  const [showNameParts, setShowNameParts] = useState(false);
   const [pin, setPin] = useState<{ lng: number; lat: number } | null>(
     initial?.current_lng != null && initial?.current_lat != null
       ? { lng: initial.current_lng, lat: initial.current_lat }
       : null,
   );
   const [showPicker, setShowPicker] = useState(false);
+
+  function setField<K extends keyof ContactDetails>(key: K, value: ContactDetails[K]) {
+    setDetails((d) => ({ ...d, [key]: value }));
+  }
 
   function setCustomField(key: string, value: unknown) {
     setCustom((c) => ({ ...c, [key]: value }));
@@ -64,14 +132,16 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
     e.preventDefault();
     onSubmit({
       full_name: fullName,
-      primary_email: email || null,
-      phone: phone || null,
+      // primary_email and phone are derived from details by useContacts.
+      primary_email: null,
+      phone: null,
       notes: notes || null,
       origin_country: originCountry || null,
       current_city: city || null,
       current_country: country || null,
       category,
       custom,
+      details: cleanDetails(details),
       socials: Object.fromEntries(Object.entries(socials).filter(([, v]) => v.trim())),
       current_lng: pin?.lng,
       current_lat: pin?.lat,
@@ -84,16 +154,81 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
         Full name
         <input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
       </label>
-      <div className="row">
-        <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label>
-          Phone
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-        </label>
-      </div>
+      <button type="button" className="link align-start" onClick={() => setShowNameParts((v) => !v)}>
+        {showNameParts ? 'Hide name details' : 'Name details, nickname, file as'}
+      </button>
+      {showNameParts && (
+        <div className="name-parts">
+          <div className="row">
+            <label>
+              Prefix
+              <input value={details.prefix ?? ''} onChange={(e) => setField('prefix', e.target.value)} />
+            </label>
+            <label>
+              Suffix
+              <input value={details.suffix ?? ''} onChange={(e) => setField('suffix', e.target.value)} />
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              First name
+              <input value={details.first_name ?? ''} onChange={(e) => setField('first_name', e.target.value)} />
+            </label>
+            <label>
+              Middle name
+              <input value={details.middle_name ?? ''} onChange={(e) => setField('middle_name', e.target.value)} />
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              Last name
+              <input value={details.last_name ?? ''} onChange={(e) => setField('last_name', e.target.value)} />
+            </label>
+            <label>
+              Nickname
+              <input value={details.nickname ?? ''} onChange={(e) => setField('nickname', e.target.value)} />
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              Phonetic first
+              <input value={details.phonetic_first ?? ''} onChange={(e) => setField('phonetic_first', e.target.value)} />
+            </label>
+            <label>
+              Phonetic last
+              <input value={details.phonetic_last ?? ''} onChange={(e) => setField('phonetic_last', e.target.value)} />
+            </label>
+          </div>
+          <div className="row">
+            <label>
+              Phonetic middle
+              <input value={details.phonetic_middle ?? ''} onChange={(e) => setField('phonetic_middle', e.target.value)} />
+            </label>
+            <label>
+              File as
+              <input value={details.file_as ?? ''} onChange={(e) => setField('file_as', e.target.value)} />
+            </label>
+          </div>
+        </div>
+      )}
+
+      <LabeledRows
+        title="Email"
+        rows={details.emails ?? []}
+        onChange={(r) => setField('emails', r)}
+        options={EMAIL_LABELS}
+        placeholder="name@example.com"
+        note="The first entry is the one shown in lists and used to match duplicates."
+      />
+      <LabeledRows
+        title="Phone"
+        rows={details.phones ?? []}
+        onChange={(r) => setField('phones', r)}
+        options={PHONE_LABELS}
+        placeholder="+41 79 000 00 00"
+      />
+
+      <div className="section-label">Map location</div>
       <div className="row">
         <label>
           Current city
@@ -132,7 +267,60 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
         </label>
       </div>
 
-      {fields.length > 0 && <div className="section-label">Custom fields</div>}
+      <OrganizationRows
+        rows={details.organizations ?? []}
+        onChange={(r) => setField('organizations', r)}
+      />
+
+      <label>
+        Birthday <span className="muted">{DATE_HINT}</span>
+        <input
+          value={details.birthday ?? ''}
+          placeholder={DATE_HINT}
+          onChange={(e) => setField('birthday', e.target.value)}
+        />
+      </label>
+
+      <AddressRows rows={details.addresses ?? []} onChange={(r) => setField('addresses', r)} />
+
+      <LabeledRows
+        title="Website"
+        rows={details.urls ?? []}
+        onChange={(r) => setField('urls', r)}
+        options={URL_LABELS}
+        placeholder="https://..."
+      />
+      <LabeledRows
+        title="Chat"
+        rows={details.chats ?? []}
+        onChange={(r) => setField('chats', r)}
+        options={CHAT_LABELS}
+        placeholder="username"
+      />
+      <LabeledRows
+        title="Related people"
+        rows={details.relations ?? []}
+        onChange={(r) => setField('relations', r)}
+        options={RELATION_LABELS}
+        placeholder="Name"
+      />
+      <LabeledRows
+        title="Significant dates"
+        rows={details.events ?? []}
+        onChange={(r) => setField('events', r)}
+        options={EVENT_LABELS}
+        placeholder={DATE_HINT}
+      />
+      <LabeledRows
+        title="Custom fields"
+        rows={details.user_defined ?? []}
+        onChange={(r) => setField('user_defined', r)}
+        options={[]}
+        placeholder="Value"
+        note="Synced to Google as custom fields."
+      />
+
+      {fields.length > 0 && <div className="section-label">App-only fields</div>}
       {fields.map((f) => (
         <CustomField
           key={f.id}
@@ -187,6 +375,173 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
         />
       )}
     </form>
+  );
+}
+
+// Google allows any string as a label, so the suggestions go in a datalist
+// rather than a select - pick one or type your own, same as Google's editor.
+function LabeledRows({
+  title,
+  rows,
+  onChange,
+  options,
+  placeholder,
+  note,
+}: {
+  title: string;
+  rows: LabeledValue[];
+  onChange: (rows: LabeledValue[]) => void;
+  options: string[];
+  placeholder: string;
+  note?: string;
+}) {
+  const listId = `dl-${title.replace(/\s+/g, '-').toLowerCase()}`;
+
+  function set(i: number, patch: Partial<LabeledValue>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  return (
+    <div className="repeat-block">
+      <div className="section-label">{title}</div>
+      {note && <div className="muted small">{note}</div>}
+      {options.length > 0 && (
+        <datalist id={listId}>
+          {options.map((o) => <option key={o} value={o} />)}
+        </datalist>
+      )}
+      {rows.map((r, i) => (
+        <div key={i} className="repeat-row">
+          <input
+            className="rr-label"
+            list={options.length ? listId : undefined}
+            placeholder="Label"
+            value={r.label}
+            onChange={(e) => set(i, { label: e.target.value })}
+          />
+          <input
+            placeholder={placeholder}
+            value={r.value}
+            onChange={(e) => set(i, { value: e.target.value })}
+          />
+          <button
+            type="button"
+            className="rr-x"
+            title="Remove"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="link align-start"
+        onClick={() => onChange([...rows, { label: '', value: '' }])}
+      >
+        + Add {title.toLowerCase()}
+      </button>
+    </div>
+  );
+}
+
+function OrganizationRows({
+  rows,
+  onChange,
+}: {
+  rows: ContactOrganization[];
+  onChange: (rows: ContactOrganization[]) => void;
+}) {
+  function set(i: number, patch: Partial<ContactOrganization>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  return (
+    <div className="repeat-block">
+      <div className="section-label">Organization</div>
+      {rows.map((r, i) => (
+        <div key={i} className="repeat-row org-row">
+          <input placeholder="Company" value={r.name} onChange={(e) => set(i, { name: e.target.value })} />
+          <input placeholder="Job title" value={r.title} onChange={(e) => set(i, { title: e.target.value })} />
+          <input placeholder="Department" value={r.department} onChange={(e) => set(i, { department: e.target.value })} />
+          <button
+            type="button"
+            className="rr-x"
+            title="Remove"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="link align-start"
+        onClick={() => onChange([...rows, { name: '', title: '', department: '' }])}
+      >
+        + Add organization
+      </button>
+    </div>
+  );
+}
+
+function AddressRows({
+  rows,
+  onChange,
+}: {
+  rows: ContactAddress[];
+  onChange: (rows: ContactAddress[]) => void;
+}) {
+  function set(i: number, patch: Partial<ContactAddress>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  return (
+    <div className="repeat-block">
+      <div className="section-label">Postal address</div>
+      <div className="muted small">
+        Separate from the map location above, which is what places the contact on the map.
+      </div>
+      <datalist id="dl-address">
+        {ADDRESS_LABELS.map((o) => <option key={o} value={o} />)}
+      </datalist>
+      {rows.map((r, i) => (
+        <div key={i} className="addr-row">
+          <input
+            className="rr-label"
+            list="dl-address"
+            placeholder="Label"
+            value={r.label}
+            onChange={(e) => set(i, { label: e.target.value })}
+          />
+          <input placeholder="Street" value={r.street} onChange={(e) => set(i, { street: e.target.value })} />
+          <input placeholder="City" value={r.city} onChange={(e) => set(i, { city: e.target.value })} />
+          <input placeholder="Region" value={r.region} onChange={(e) => set(i, { region: e.target.value })} />
+          <input placeholder="Postal code" value={r.postal_code} onChange={(e) => set(i, { postal_code: e.target.value })} />
+          <CountrySelect value={r.country} onChange={(v) => set(i, { country: v })} />
+          <button
+            type="button"
+            className="rr-x"
+            title="Remove"
+            onClick={() => onChange(rows.filter((_, j) => j !== i))}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        className="link align-start"
+        onClick={() =>
+          onChange([
+            ...rows,
+            { label: '', street: '', city: '', region: '', postal_code: '', country: '' },
+          ])
+        }
+      >
+        + Add address
+      </button>
+    </div>
   );
 }
 
