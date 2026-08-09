@@ -3,7 +3,9 @@ import { Map, useControl, type MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { MapPoint } from './useMapData';
+import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap, useMarkerOutline } from '../../lib/basemap';
+import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -12,6 +14,11 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 // Radius grows with the stack so density still reads at a glance.
 function radiusFor(p: MapPoint) {
   return p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2;
+}
+
+// City when the dots are per city, country name when they are per country.
+function placeLabel(p: MapPoint) {
+  return p.city ?? COUNTRY_BY_CODE.get(p.country ?? '')?.name ?? null;
 }
 
 function DeckOverlay(props: ConstructorParameters<typeof MapboxOverlay>[0]) {
@@ -33,6 +40,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
   const basemap = useBasemap();
   const outline = useMarkerOutline();
   const theme = useTheme((s) => s.theme);
+  const setGrouping = useMapStore((s) => s.setGrouping);
   const mapRef = useRef<MapRef | null>(null);
 
   useEffect(() => {
@@ -102,6 +110,10 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}
+      // Only the country/city threshold is stored, so panning inside one zoom
+      // band writes the same value and nothing regroups.
+      onLoad={(e) => setGrouping(groupingForZoom(e.target.getZoom()))}
+      onMove={(e) => setGrouping(groupingForZoom(e.viewState.zoom))}
       style={{ position: 'absolute', inset: 0 }}
     >
       <DeckOverlay
@@ -118,9 +130,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
           ) : (
             `${hovered.count} contacts`
           )}
-          {hovered.contacts[0].current_city && (
-            <span className="mh-city">{hovered.contacts[0].current_city}</span>
-          )}
+          {placeLabel(hovered) && <span className="mh-city">{placeLabel(hovered)}</span>}
         </div>
       )}
     </Map>

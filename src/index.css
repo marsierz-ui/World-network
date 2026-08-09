@@ -286,6 +286,8 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .addr-row .rr-x { grid-column: 4; grid-row: 1 / span 2; height: 100%; }
 .name-parts { display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
 .align-start { align-self: flex-start; padding: 0; }
+.filter-clear { float: right; font-size: 0.9em; text-transform: none; letter-spacing: 0; padding: 0; }
+.map-filters .chips { margin: 6px 0; }
 .muted.small { font-size: 0.8em; }
 
 .custom-fields { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 16px; }
@@ -416,6 +418,10 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .import-card h3 { margin: 0 0 6px; }
 .actions-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
 .summary { margin-top: 10px; color: var(--private); font-size: 0.9em; }
+.sync-report { margin-top: 10px; font-size: 0.9em; }
+.sync-report ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sync-report li { color: var(--text-dim); }
+.sync-report strong { color: var(--text); font-weight: 600; }
 .badge { display: inline-block; background: var(--accent); color: var(--on-accent); border-radius: 6px; padding: 2px 8px; font-size: 0.8em; margin: 10px 0; }
 .mapping-table { width: 100%; border-collapse: collapse; font-size: 0.88em; margin-top: 8px; }
 .mapping-table th { text-align: left; color: var(--text-dim); padding: 6px; font-weight: 500; }

@@ -52,7 +52,10 @@ async function call(token: string, url: URL, init?: RequestInit): Promise<Respon
 
 type Gate = { token: string; blocked?: undefined } | { token?: undefined; blocked: PushResult };
 
-async function openGate(): Promise<Gate> {
+// A token is passed in when the caller already opened the gate for a run of
+// pushes, so a sweep does not re-read the profile once per contact.
+async function openGate(known?: string): Promise<Gate> {
+  if (known) return { token: known };
   const { data: profile } = await supabase
     .from('profiles')
     .select('google_sync_enabled')
@@ -115,11 +118,11 @@ function changedFields(ours: PersonPatch, person: GooglePerson): string[] {
 // ---------------------------------------------------------------------------
 
 /** Push a contact's edits to the Google contact it was imported from. */
-export async function pushContactToGoogle(contact: Contact): Promise<PushResult> {
+export async function pushContactToGoogle(contact: Contact, token?: string): Promise<PushResult> {
   const resourceName = googleResourceName(contact);
   if (!resourceName) return 'not-linked';
 
-  const gate = await openGate();
+  const gate = await openGate(token);
   if (gate.blocked) return gate.blocked;
 
   const person = await getPerson(gate.token, resourceName);
@@ -144,10 +147,11 @@ export async function pushContactToGoogle(contact: Contact): Promise<PushResult>
  */
 export async function createContactInGoogle(
   contact: Contact,
+  token?: string,
 ): Promise<{ result: PushResult; resourceName: string | null }> {
   if (googleResourceName(contact)) return { result: 'unchanged', resourceName: null };
 
-  const gate = await openGate();
+  const gate = await openGate(token);
   if (gate.blocked) return { result: gate.blocked, resourceName: null };
 
   const { body, mask } = patchFor(contact);
@@ -159,4 +163,87 @@ export async function createContactInGoogle(
   const created: GooglePerson = await res.json();
 
   return { result: 'created', resourceName: created.resourceName ?? null };
+}
+
+/** What a sync wrote into Google Contacts, by contact name. */
+export interface OutboundReport {
+  created: string[];
+  updated: string[];
+  /** Examined and found identical to Google's copy, so nothing was sent. */
+  unchanged: number;
+  failed: { name: string; error: string }[];
+  /** Set when nothing could be sent at all: sync off, or Google not connected. */
+  blocked: PushResult | null;
+}
+
+const PUSH_COLUMNS =
+  'id,full_name,notes,current_city,current_country,source,external_ids,details,updated_at';
+
+/**
+ * Send every local edit made since `since` to Google, and report what changed
+ * there.
+ *
+ * Individual saves already push on their own (see googleQueue); this catches
+ * what those could not - edits made while Google was disconnected, the token
+ * had expired, or the sync switch was off - so a sync leaves both sides equal
+ * and can say exactly which Google contacts it touched.
+ */
+export async function pushChangedContacts(
+  since: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<OutboundReport> {
+  const report: OutboundReport = {
+    created: [],
+    updated: [],
+    unchanged: 0,
+    failed: [],
+    blocked: null,
+  };
+
+  const gate = await openGate();
+  if (gate.blocked) {
+    report.blocked = gate.blocked;
+    return report;
+  }
+
+  const { data } = await supabase
+    .from('contacts')
+    .select(PUSH_COLUMNS)
+    .gt('updated_at', since)
+    .order('updated_at');
+
+  // Contacts from a CSV or LinkedIn export are never created in Google: one
+  // import would otherwise push hundreds of rows into the address book. They
+  // still receive updates once a sync has linked them.
+  const queue = ((data as Contact[] | null) ?? []).filter(
+    (c) => googleResourceName(c) || c.source === 'manual',
+  );
+
+  let done = 0;
+  for (const contact of queue) {
+    try {
+      if (googleResourceName(contact)) {
+        const result = await pushContactToGoogle(contact, gate.token);
+        if (result === 'updated') report.updated.push(contact.full_name);
+        else report.unchanged++;
+      } else {
+        const { resourceName } = await createContactInGoogle(contact, gate.token);
+        if (resourceName) {
+          await supabase
+            .from('contacts')
+            .update({ external_ids: { ...contact.external_ids, google: resourceName } })
+            .eq('id', contact.id);
+          report.created.push(contact.full_name);
+        } else {
+          report.unchanged++;
+        }
+      }
+    } catch (e) {
+      // One rejected contact must not cost the rest of the queue its turn.
+      report.failed.push({ name: contact.full_name, error: (e as Error).message });
+    }
+    onProgress?.(++done, queue.length);
+  }
+
+  return report;
 }

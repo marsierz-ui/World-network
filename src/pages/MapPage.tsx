@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useContacts } from '../features/contacts/useContacts';
 import { useProfile } from '../features/profile/useProfile';
@@ -19,17 +19,21 @@ export function MapPage() {
   const { data: tags = [] } = useTags();
   const { data: tagMap = {} } = useContactTagMap();
   const viewMode = useMapStore((s) => s.viewMode);
+  const locationBasis = useMapStore((s) => s.locationBasis);
   const categories = useMapStore((s) => s.categories);
-  const country = useMapStore((s) => s.country);
+  const countries = useMapStore((s) => s.countries);
   const tagId = useMapStore((s) => s.tagId);
-  const [selected, setSelected] = useState<MapPoint | null>(null);
+  // A contact id rather than the point: zooming past the country/city threshold
+  // rebuilds every point, and a held object would leave the card pointing at a
+  // stack that no longer exists.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mapKind, setMapKind] = useState<'flat' | 'globe'>('flat');
   // The panel is tall enough to bury a phone screen, so start it collapsed there.
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 768);
   const [focus, setFocus] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
 
   const activeFilters =
-    (categories.size > 0 ? 1 : 0) + (country ? 1 : 0) + (tagId ? 1 : 0);
+    (categories.size > 0 ? 1 : 0) + (countries.size > 0 ? 1 : 0) + (tagId ? 1 : 0);
 
   const homeCountry = profile?.home_country ?? null;
 
@@ -38,11 +42,26 @@ export function MapPage() {
     [contacts, tagMap],
   );
 
-  const { points, legend } = useMapData(contactsWithTags, homeCountry, tags);
+  const { points, filtered, legend } = useMapData(contactsWithTags, homeCountry, tags);
+
+  const selected = useMemo(
+    () =>
+      selectedId ? points.find((p) => p.contacts.some((c) => c.id === selectedId)) ?? null : null,
+    [points, selectedId],
+  );
+
+  // Stable: it is a dependency of the deck.gl layer list, which would otherwise
+  // be rebuilt on every render of this page.
+  const select = useCallback((p: MapPoint | null) => setSelectedId(p?.contacts[0].id ?? null), []);
 
   const countriesPresent = useMemo(
-    () => new Set(contacts.map((c) => c.current_country).filter(Boolean) as string[]),
-    [contacts],
+    () =>
+      new Set(
+        contacts
+          .map((c) => (locationBasis === 'origin' ? c.origin_country : c.current_country))
+          .filter(Boolean) as string[],
+      ),
+    [contacts, locationBasis],
   );
 
   const initialView = useMemo(() => {
@@ -56,13 +75,14 @@ export function MapPage() {
   const placed = points.reduce((n, p) => n + p.count, 0);
   const unplaced = contacts.length - placed;
 
-  // Jump to whatever the user picked in search and open its card.
+  // Jump to whatever the user picked in search and open its card. The target is
+  // the contact's own coordinate, not the dot's: while zoomed out that dot sits
+  // on a country centroid, and zoom 8 there lands nowhere near the person.
   function goToContact(c: Contact) {
-    const point = points.find((p) => p.contacts.some((x) => x.id === c.id));
-    if (point) {
-      setSelected(point);
-      setFocus({ lng: point.lng, lat: point.lat, zoom: 8 });
-    }
+    const anchored = filtered.find((x) => x.id === c.id);
+    if (!anchored) return;
+    setSelectedId(c.id);
+    setFocus({ lng: anchored.current_lng!, lat: anchored.current_lat!, zoom: 8 });
   }
 
   return (
@@ -74,7 +94,7 @@ export function MapPage() {
           initialView={initialView}
           focus={focus}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={select}
         />
       ) : (
         <GlobeMap
@@ -83,7 +103,7 @@ export function MapPage() {
           initialView={initialView}
           focus={focus}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={select}
         />
       )}
 
@@ -146,7 +166,7 @@ export function MapPage() {
       )}
 
       {selected && (
-        <PointCard point={selected} tags={tags} onClose={() => setSelected(null)} />
+        <PointCard point={selected} tags={tags} onClose={() => setSelectedId(null)} />
       )}
     </div>
   );

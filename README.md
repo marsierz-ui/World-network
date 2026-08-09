@@ -78,6 +78,13 @@ Guardrails:
   asked again next sync, because the answer lives in Google and can change there.
 - Contacts imported before the link existed get adopted on the next sync.
 
+"Sync now" on the Settings page runs both directions: it pulls from Google, then pushes every
+contact edited here since the last sync (`pushChangedContacts` in `googlePush.ts`) and lists by
+name what it created or updated in Google. Contacts from a CSV or LinkedIn export are only ever
+updated, never created there - one import would otherwise push hundreds of rows into the address
+book. The very first sync pushes nothing, because with no previous timestamp every contact looks
+changed. The Google card on the Import page stays a one-way pull.
+
 ### City geocoding
 
 The repo ships with ~75 curated cities so geocoding works with no setup. For full coverage
@@ -113,7 +120,8 @@ npx tsc -b --noEmit  # typecheck
 
 - Email/password + Google OAuth sign-in
 - Contacts CRUD with user-defined custom fields (e.g. "inside jokes")
-- World map: contact pins, city clustering, click for details, hover readout
+- World map: contact pins that stack per country while zoomed out and split into cities from
+  zoom 4 (`CITY_ZOOM` in `src/features/map/mapStore.ts`), click for details, hover readout
 - Cosmopolitan vs homelover view toggle (recenters on home country)
 - Filters: category, country, tag/community
 - Tags/communities with assignment per contact

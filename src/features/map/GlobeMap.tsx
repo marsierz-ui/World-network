@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-map-gl/maplibre';
 import type { MapPoint } from './useMapData';
+import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap } from '../../lib/basemap';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -19,6 +20,7 @@ interface Props {
 export function GlobeMap({ points, initialView, focus, selected, onSelect }: Props) {
   const BASEMAP = useBasemap();
   const outline = useTheme((s) => (s.theme === 'light' ? '#ffffff' : '#0a0c10'));
+  const setGrouping = useMapStore((s) => s.setGrouping);
   const mapRef = useRef<MapRef | null>(null);
 
   useEffect(() => {
@@ -74,7 +76,11 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={BASEMAP}
-      onLoad={(e) => e.target.setProjection({ type: 'globe' })}
+      onLoad={(e) => {
+        e.target.setProjection({ type: 'globe' });
+        setGrouping(groupingForZoom(e.target.getZoom()));
+      }}
+      onMove={(e) => setGrouping(groupingForZoom(e.viewState.zoom))}
       interactiveLayerIds={['points']}
       onClick={handleClick}
       onMouseEnter={(e) => (e.target.getCanvas().style.cursor = 'pointer')}

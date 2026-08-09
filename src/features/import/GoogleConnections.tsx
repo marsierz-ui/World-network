@@ -2,6 +2,7 @@ import { useAuth } from '../auth/authContext';
 import { useProfile, useUpdateProfile } from '../profile/useProfile';
 import { ReimportPrompt } from './ReimportPrompt';
 import { useGoogleSync } from './useGoogleSync';
+import type { OutboundReport } from './googlePush';
 
 export function GoogleConnections() {
   const { signInWithGoogle, session } = useAuth();
@@ -36,7 +37,7 @@ export function GoogleConnections() {
       </div>
       <div className="actions-row">
         <button className="link" onClick={signInWithGoogle}>Connect Google</button>
-        <button onClick={sync.run} disabled={!enabled || sync.busy}>
+        <button onClick={() => sync.run()} disabled={!enabled || sync.busy}>
           {sync.busy ? 'Syncing...' : 'Sync now'}
         </button>
       </div>
@@ -51,6 +52,7 @@ export function GoogleConnections() {
           {s.linked > 0 && `, ${s.linked} linked back to Google for editing`}.
         </div>
       )}
+      {sync.outbound && <OutboundNote report={sync.outbound} />}
       <p className="muted small">
         Pull is on-demand (runs when you click, or right after connecting Google). Automatic
         background sync requires a server component and is planned.
@@ -65,6 +67,41 @@ export function GoogleConnections() {
       {sync.pending && (
         <ReimportPrompt deleted={sync.pending} onConfirm={sync.confirm} onCancel={sync.cancel} />
       )}
+    </div>
+  );
+}
+
+// The other direction of the sync: what this app just wrote into Google
+// Contacts. Named, not counted - these are edits to data living elsewhere, so
+// "3 updated" is not enough to check the run did what you expected.
+function OutboundNote({ report }: { report: OutboundReport }) {
+  if (report.blocked === 'no-token') {
+    return (
+      <div className="muted">
+        Your edits were not sent to Google: reconnect Google, then sync again.
+      </div>
+    );
+  }
+  const touched = report.created.length + report.updated.length + report.failed.length;
+  if (touched === 0) {
+    return <div className="muted">Nothing here needed sending to Google.</div>;
+  }
+  return (
+    <div className="sync-report">
+      <div className="section-label">Changed in Google Contacts</div>
+      <ul>
+        {report.created.map((name) => (
+          <li key={`c:${name}`}>Created <strong>{name}</strong></li>
+        ))}
+        {report.updated.map((name) => (
+          <li key={`u:${name}`}>Updated <strong>{name}</strong></li>
+        ))}
+        {report.failed.map((f) => (
+          <li key={`f:${f.name}`} className="error">
+            {f.name} could not be sent: {f.error}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

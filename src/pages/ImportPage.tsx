@@ -29,7 +29,8 @@ function LinkedInImport() {
   const bulk = useBulkImport();
   const self = useImportLinkedInSelf();
   const [token, setToken] = useState('');
-  const [version, setVersion] = useState('202605');
+  // memberSnapshotData only accepts 202312; see linkedinPortability.ts.
+  const [version, setVersion] = useState('202312');
   const [status, setStatus] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
@@ -77,8 +78,8 @@ function LinkedInImport() {
     <section className="import-card">
       <h3>LinkedIn (Member Data Portability)</h3>
       <p className="muted">
-        Generate an access token with the <code>r_dma_portability_self_serve</code> scope in
-        LinkedIn's{' '}
+        Generate an access token with a Member Data Portability scope
+        (<code>r_dma_portability_member</code>) in LinkedIn's{' '}
         <a href="https://www.linkedin.com/developers/tools/oauth" target="_blank" rel="noreferrer">
           OAuth Token Generator
         </a>{' '}
@@ -129,7 +130,10 @@ function GoogleImport() {
         sign-in.
       </p>
       <div className="actions-row">
-        <button onClick={sync.run} disabled={sync.busy}>Import from Google</button>
+        {/* Pull only - the two-way sync lives on the Settings page. */}
+        <button onClick={() => sync.run({ push: false })} disabled={sync.busy}>
+          Import from Google
+        </button>
         <button className="link" onClick={signInWithGoogle}>Reconnect Google</button>
       </div>
       {sync.status && <div className="muted">{sync.status}</div>}

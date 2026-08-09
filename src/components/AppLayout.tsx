@@ -11,11 +11,11 @@ export function AppLayout() {
       <nav className="sidebar">
         <div className="brand">World Network</div>
         <NavLink to="/" end>Map</NavLink>
+        <NavLink to="/contacts">Contacts</NavLink>
+        <NavLink to="/history">History</NavLink>
         <NavLink to="/mobility">Mobility</NavLink>
         <NavLink to="/social">Social</NavLink>
         <NavLink to="/feed">Feed</NavLink>
-        <NavLink to="/contacts">Contacts</NavLink>
-        <NavLink to="/history">History</NavLink>
         <NavLink to="/import">Import</NavLink>
         <NavLink to="/settings">Settings</NavLink>
         <div className="spacer" />

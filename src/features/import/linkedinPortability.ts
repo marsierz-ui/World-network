@@ -6,8 +6,15 @@ import { autoMap, rowsToContacts, type ImportItem } from './parseCsv';
 
 const BASE = '/linkedin-api/rest/memberSnapshotData';
 
-// LinkedIn only accepts "active" monthly versions; the set rotates. Probe newest-first.
+// memberSnapshotData is pinned to 202312 and rejects everything else with 426:
+// "This endpoint only supports 202312." The monthly version numbers published
+// under Member Data Portability track product announcements, not this endpoint.
+// https://learn.microsoft.com/en-us/linkedin/dma/member-data-portability/shared/member-snapshot-api
+//
+// The rest stay as fallbacks in case the pin moves; 202312 is tried first so a
+// working setup never pays for a probe.
 const VERSION_CANDIDATES = [
+  '202312',
   '202606', '202605', '202604', '202603', '202602', '202601',
   '202512', '202511', '202510', '202509', '202508', '202507',
   '202506', '202505', '202504', '202503', '202502', '202501',
@@ -29,7 +36,10 @@ export async function resolveActiveVersion(token: string, preferred?: string): P
       },
     });
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`LinkedIn auth failed (${res.status}). The token is invalid or lacks the r_dma_portability scope.`);
+      throw new Error(
+        `LinkedIn auth failed (${res.status}). The token is invalid or lacks a portability scope ` +
+          '(r_dma_portability_member for your own data, r_dma_portability_3rd_party for others).',
+      );
     }
     if (res.status === 426) continue; // version not active - try the next
     return version; // 200 / 400 (no data) / 429 etc. => version is valid

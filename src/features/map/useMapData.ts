@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import type { Contact, Tag } from '../../lib/database.types';
+import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { CATEGORY_RGB } from './mapIcons';
-import { useMapStore } from './mapStore';
+import { useMapStore, type LocationBasis } from './mapStore';
 
 type Tagged = Contact & { tag_ids?: string[] };
 
@@ -94,8 +95,8 @@ function toPoint(list: Contact[], sublabels?: Map<string, Tag>): MapPoint {
 }
 
 /**
- * Group placed contacts into map dots. Exported so the grouping rules can be
- * exercised directly; the hook below just memoises it.
+ * Group placed contacts into one dot per city. Exported so the grouping rules
+ * can be exercised directly; the hook below just memoises it.
  */
 export function groupIntoPoints(placed: Contact[], sublabels?: Map<string, Tag>): MapPoint[] {
   // Group by city first. Grouping on raw coordinates alone hid people:
@@ -139,8 +140,75 @@ export function groupIntoPoints(placed: Contact[], sublabels?: Map<string, Tag>)
   return out;
 }
 
+/**
+ * Group placed contacts into one dot per country, sitting on the country
+ * centroid. Zoomed out, per-city dots are a few pixels apart and merge into a
+ * smear, so the whole country reads as one stack until the cities separate.
+ */
+export function groupIntoCountryPoints(
+  placed: Contact[],
+  sublabels?: Map<string, Tag>,
+): MapPoint[] {
+  const byCountry = new Map<string, Contact[]>();
+  const noCountry: Contact[] = [];
+  for (const c of placed) {
+    if (!c.current_country) {
+      noCountry.push(c);
+      continue;
+    }
+    const list = byCountry.get(c.current_country);
+    if (list) list.push(c);
+    else byCountry.set(c.current_country, [c]);
+  }
+
+  const out: MapPoint[] = [];
+  for (const [code, list] of byCountry) {
+    const point = toPoint(list, sublabels);
+    const centre = COUNTRY_BY_CODE.get(code);
+    if (centre) {
+      point.lng = centre.lng;
+      point.lat = centre.lat;
+    }
+    // The stack covers a whole country, so no one city names it.
+    point.city = null;
+    out.push(point);
+  }
+  // Contacts with coordinates but no country still need a dot; they group by
+  // city as usual rather than vanishing until the zoom crosses over.
+  out.push(...groupIntoPoints(noCountry, sublabels));
+  return out;
+}
+
+/**
+ * Re-anchor a contact onto the basis being viewed.
+ *
+ * Origin is only ever a country code - there is no origin city - so those
+ * contacts sit on the country centroid, one dot per country. The synthetic
+ * record overwrites current_* rather than adding parallel fields so grouping,
+ * the country filter and the point card all keep working unchanged.
+ */
+function reanchor(c: Contact, basis: LocationBasis): Contact | null {
+  if (basis === 'current') {
+    return c.current_lng != null && c.current_lat != null ? c : null;
+  }
+  const origin = COUNTRY_BY_CODE.get(c.origin_country ?? '');
+  if (!origin) return null;
+  return {
+    ...c,
+    current_city: null,
+    current_country: c.origin_country,
+    current_lng: origin.lng,
+    current_lat: origin.lat,
+  };
+}
+
 export function useMapData(contacts: Contact[], homeCountry: string | null, tags: Tag[] = []) {
-  const { viewMode, categories, country, tagId } = useMapStore();
+  const viewMode = useMapStore((s) => s.viewMode);
+  const locationBasis = useMapStore((s) => s.locationBasis);
+  const grouping = useMapStore((s) => s.grouping);
+  const categories = useMapStore((s) => s.categories);
+  const countries = useMapStore((s) => s.countries);
+  const tagId = useMapStore((s) => s.tagId);
 
   // Filtering by a parent label includes everything under it, and those
   // sublabels then drive the dot colours.
@@ -156,17 +224,26 @@ export function useMapData(contacts: Contact[], homeCountry: string | null, tags
   );
 
   const filtered = useMemo(() => {
-    return contacts.filter((c) => {
-      if (c.current_lng == null || c.current_lat == null) return false;
-      if (categories.size && !categories.has(c.category)) return false;
-      if (country && c.current_country !== country) return false;
-      if (viewMode === 'homelover' && homeCountry && c.current_country !== homeCountry) return false;
-      if (wantedTagIds && !(c as Tagged).tag_ids?.some((id) => wantedTagIds.has(id))) return false;
-      return true;
-    });
-  }, [contacts, categories, country, viewMode, homeCountry, wantedTagIds]);
+    const out: Contact[] = [];
+    for (const raw of contacts) {
+      const c = reanchor(raw, locationBasis);
+      if (!c) continue;
+      if (categories.size && !categories.has(c.category)) continue;
+      if (countries.size && !countries.has(c.current_country ?? '')) continue;
+      if (viewMode === 'homelover' && homeCountry && c.current_country !== homeCountry) continue;
+      if (wantedTagIds && !(c as Tagged).tag_ids?.some((id) => wantedTagIds.has(id))) continue;
+      out.push(c);
+    }
+    return out;
+  }, [contacts, categories, countries, viewMode, homeCountry, wantedTagIds, locationBasis]);
 
-  const points = useMemo(() => groupIntoPoints(filtered, sublabels), [filtered, sublabels]);
+  const points = useMemo(
+    () =>
+      grouping === 'country'
+        ? groupIntoCountryPoints(filtered, sublabels)
+        : groupIntoPoints(filtered, sublabels),
+    [filtered, sublabels, grouping],
+  );
 
   const legend = useMemo(
     () => [...sublabels.values()].filter((t) => points.some((p) => p.colorLabel === t.name)),

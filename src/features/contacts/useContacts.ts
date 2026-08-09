@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { geocode } from '../../lib/geocode';
-import { createContactInGoogle, pushContactToGoogle, type PushResult } from '../import/googlePush';
+import { enqueueGoogleSync } from '../import/googleQueue';
 import type { Contact, ContactDetails, FieldDefinition } from '../../lib/database.types';
 
 const CONTACT_COLUMNS =
@@ -51,6 +51,12 @@ function resolveGeo(input: Partial<ContactInput>) {
   return { current_lng: g?.lng ?? null, current_lat: g?.lat ?? null };
 }
 
+// The list query is ordered by full_name; cache patches keep that order so a
+// rename does not make the row jump on the next refetch instead of now.
+function sortByName(list: Contact[]): Contact[] {
+  return [...list].sort((a, b) => a.full_name.localeCompare(b.full_name));
+}
+
 // primary_email and phone are the app's denormalised view of the first list
 // entry - dedupe, search, the contacts table and the map read the columns and
 // never the lists, so they are rewritten whenever `details` is supplied.
@@ -65,7 +71,7 @@ function deriveScalars(input: Partial<ContactInput>): Partial<ContactInput> {
 export function useCreateContact() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: ContactInput): Promise<UpdateResult> => {
+    mutationFn: async (input: ContactInput): Promise<Contact> => {
       const { data: u } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from('contacts')
@@ -79,33 +85,23 @@ export function useCreateContact() {
         .select(CONTACT_COLUMNS)
         .single();
       if (error) throw error;
-
-      const created = data as Contact;
-      try {
-        const { result, resourceName } = await createContactInGoogle(created);
-        // Store the link straight away, otherwise the next edit has no idea
-        // which Google contact it belongs to and silently stays local.
-        if (resourceName) {
-          await supabase
-            .from('contacts')
-            .update({ external_ids: { ...created.external_ids, google: resourceName } })
-            .eq('id', created.id);
-        }
-        return { google: result, googleError: null };
-      } catch (e) {
-        return { google: 'failed', googleError: (e as Error).message };
-      }
+      return data as Contact;
     },
-    onSuccess: () =>
-      qc.invalidateQueries({
-        predicate: (q) => ['contacts', 'contact_events'].includes(q.queryKey[0] as string),
-      }),
+    onSuccess: (created) => {
+      // Splice the new row in rather than refetching every contact.
+      qc.setQueryData<Contact[]>(['contacts'], (old) => sortByName([...(old ?? []), created]));
+      qc.invalidateQueries({ queryKey: ['contact_events'] });
+      enqueueGoogleSync(created, 'create', (resourceName) =>
+        qc.setQueryData<Contact[]>(['contacts'], (old) =>
+          old?.map((c) =>
+            c.id === created.id
+              ? { ...c, external_ids: { ...c.external_ids, google: resourceName } }
+              : c,
+          ),
+        ),
+      );
+    },
   });
-}
-
-export interface UpdateResult {
-  google: PushResult | 'failed';
-  googleError: string | null;
 }
 
 export function useUpdateContact() {
@@ -117,7 +113,7 @@ export function useUpdateContact() {
     }: {
       id: string;
       input: Partial<ContactInput>;
-    }): Promise<UpdateResult> => {
+    }): Promise<Contact> => {
       const touchesLocation =
         input.current_city !== undefined ||
         input.current_country !== undefined ||
@@ -134,15 +130,27 @@ export function useUpdateContact() {
         .select(CONTACT_COLUMNS)
         .single();
       if (error) throw error;
-      // The local save already committed, so a Google failure is reported
-      // rather than thrown - the edit itself must not look lost.
-      try {
-        return { google: await pushContactToGoogle(data as Contact), googleError: null };
-      } catch (e) {
-        return { google: 'failed', googleError: (e as Error).message };
-      }
+      return data as Contact;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['contacts'] }),
+    // Repaint from the edit itself so the table and map react on the same frame
+    // the user clicks. The authoritative row replaces it a round-trip later.
+    onMutate: async ({ id, input }) => {
+      await qc.cancelQueries({ queryKey: ['contacts'] });
+      const prev = qc.getQueryData<Contact[]>(['contacts']);
+      qc.setQueryData<Contact[]>(['contacts'], (old) =>
+        old?.map((c) => (c.id === id ? ({ ...c, ...input } as Contact) : c)),
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['contacts'], ctx.prev);
+    },
+    onSuccess: (updated) => {
+      qc.setQueryData<Contact[]>(['contacts'], (old) =>
+        sortByName((old ?? []).map((c) => (c.id === updated.id ? updated : c))),
+      );
+      enqueueGoogleSync(updated, 'update');
+    },
   });
 }
 
@@ -152,11 +160,14 @@ export function useDeleteContact() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('contacts').delete().eq('id', id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () =>
+    onSuccess: (id) => {
+      qc.setQueryData<Contact[]>(['contacts'], (old) => old?.filter((c) => c.id !== id));
       qc.invalidateQueries({
-        predicate: (q) => ['contacts', 'contact_events'].includes(q.queryKey[0] as string),
-      }),
+        predicate: (q) => ['contact_tags', 'contact_events'].includes(q.queryKey[0] as string),
+      });
+    },
   });
 }
 
@@ -169,11 +180,12 @@ export function useDeleteAllContacts() {
       const { error } = await supabase.from('contacts').delete().eq('user_id', u.user!.id);
       if (error) throw error;
     },
-    onSuccess: () =>
+    onSuccess: () => {
+      qc.setQueryData<Contact[]>(['contacts'], []);
       qc.invalidateQueries({
-        predicate: (q) =>
-          ['contacts', 'contact_tags', 'contact_events'].includes(q.queryKey[0] as string),
-      }),
+        predicate: (q) => ['contact_tags', 'contact_events'].includes(q.queryKey[0] as string),
+      });
+    },
   });
 }
 

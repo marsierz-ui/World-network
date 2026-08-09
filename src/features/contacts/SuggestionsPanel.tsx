@@ -25,9 +25,22 @@ function words(text: string) {
   return text.split(/[^\p{Letter}]+/u).filter((w) => w.length > 3);
 }
 
+// Scanning a note word-by-word against the full city dataset is the most
+// expensive thing on this page, and the same label text ("Zurich", "alumni")
+// recurs across dozens of contacts. Results are pure, so cache them.
+const textCache = new Map<string, { options: Option[]; matched: string } | null>();
+
+function optionsFromText(text: string) {
+  const hit = textCache.get(text);
+  if (hit !== undefined) return hit;
+  const computed = computeOptions(text);
+  textCache.set(text, computed);
+  return computed;
+}
+
 // Build the candidate places implied by a piece of text: a country name, or a
 // city name that may exist in several countries (offered as separate options).
-function optionsFromText(text: string): { options: Option[]; matched: string } | null {
+function computeOptions(text: string): { options: Option[]; matched: string } | null {
   const ws = words(text);
 
   for (let i = 0; i < ws.length; i++) {

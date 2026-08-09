@@ -1,38 +1,37 @@
 import { useState } from 'react';
-import { useContactTagMap, useCreateTag, useSetContactTags, useTags } from './useTags';
+import type { Tag } from '../../lib/database.types';
 
-// Compact tag editor for a contacts-table row: chips + a popover to toggle/create tags.
-export function InlineTags({ contactId }: { contactId: string }) {
-  const { data: tags = [] } = useTags();
-  const { data: tagMap = {} } = useContactTagMap();
-  const setTags = useSetContactTags();
-  const createTag = useCreateTag();
+interface Props {
+  tags: Tag[];
+  assigned: string[];
+  onToggle: (tagId: string) => void;
+  onCreate: (name: string) => void;
+}
+
+/**
+ * Compact tag editor for a contacts-table row: chips + a popover to toggle or
+ * create tags.
+ *
+ * Data and handlers come in as props on purpose. Reading the tag queries here
+ * meant every row opened its own subscriptions, so a table of 500 contacts held
+ * 1000 observers and re-rendered all of them whenever any tag changed.
+ */
+export function InlineTags({ tags, assigned, onToggle, onCreate }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const assigned = tagMap[contactId] ?? [];
   const assignedSet = new Set(assigned);
-
-  function toggle(tagId: string) {
-    const next = new Set(assignedSet);
-    if (next.has(tagId)) next.delete(tagId);
-    else next.add(tagId);
-    setTags.mutate({ contactId, tagIds: [...next] });
-  }
 
   function create() {
     const name = query.trim();
     if (!name) return;
-    createTag.mutate(
-      { name, kind: 'label', color: '#6366f1' },
-      {
-        onSuccess: () => setQuery(''),
-      },
-    );
+    onCreate(name);
+    setQuery('');
   }
 
   const filtered = tags.filter((t) => t.name.toLowerCase().includes(query.toLowerCase()));
-  const canCreate = query.trim() && !tags.some((t) => t.name.toLowerCase() === query.trim().toLowerCase());
+  const canCreate =
+    query.trim() && !tags.some((t) => t.name.toLowerCase() === query.trim().toLowerCase());
 
   return (
     <div className="inline-tags" onClick={(e) => e.stopPropagation()}>
@@ -41,7 +40,7 @@ export function InlineTags({ contactId }: { contactId: string }) {
           const t = tags.find((x) => x.id === id);
           if (!t) return null;
           return (
-            <span key={id} className="chip" onClick={() => toggle(id)} title="click to remove">
+            <span key={id} className="chip" onClick={() => onToggle(id)} title="click to remove">
               {t.name}
             </span>
           );
@@ -68,7 +67,7 @@ export function InlineTags({ contactId }: { contactId: string }) {
                 type="button"
                 key={t.id}
                 className={assignedSet.has(t.id) ? 'it-opt active' : 'it-opt'}
-                onClick={() => toggle(t.id)}
+                onClick={() => onToggle(t.id)}
               >
                 <span className="it-check">{assignedSet.has(t.id) ? '✓' : ''}</span>
                 {t.name}
