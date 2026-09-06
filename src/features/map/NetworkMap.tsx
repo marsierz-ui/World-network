@@ -63,16 +63,23 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         getPosition: (d) => [d.lng, d.lat],
         getRadius: radiusFor,
         // Translucent so overlapping points and the basemap both stay readable.
-        getFillColor: (d) => [...d.color, 170] as [number, number, number, number],
-        getLineColor: outline,
-        getLineWidth: 1.5,
+        // Flag fills go nearly opaque: at the translucency that keeps category
+        // dots from hiding the basemap, a flag's colours wash out into pastels
+        // and stop being recognisable as that flag.
+        getFillColor: (d) =>
+          [...d.color, d.ring ? 225 : 170] as [number, number, number, number],
+        // Flag colouring gives the dot its own ring (the flag's second colour);
+        // otherwise the ring is there to separate the dot from the basemap.
+        getLineColor: (d) =>
+          d.ring ? ([...d.ring, 255] as [number, number, number, number]) : outline,
+        getLineWidth: (d) => (d.ring ? 2.5 : 1.5),
         radiusMinPixels: 4,
         radiusMaxPixels: 28,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 90],
         onClick: (info) => onSelect((info.object as MapPoint) ?? null),
         onHover: (info) => setHovered((info.object as MapPoint) ?? null),
-        updateTriggers: { getLineColor: theme, getFillColor: points },
+        updateTriggers: { getLineColor: [theme, points], getFillColor: points, getLineWidth: points },
       }),
       // Ring marking the open point, so the card and the map agree.
       new ScatterplotLayer<MapPoint>({

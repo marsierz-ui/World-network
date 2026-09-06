@@ -1,42 +1,48 @@
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useProfile, useUpdateProfile } from '../profile/useProfile';
 import { fetchGoogleContacts } from './googleContacts';
-import { getGoogleToken } from './googleToken';
+import { getGoogleAccessToken, googleTokenReason } from './googleToken';
+import { describeGoogleError } from './googleError';
 import { pushChangedContacts, type OutboundReport } from './googlePush';
 import { findDeletedMatches, useBulkImport, type ImportSummary } from './useImport';
 import type { ImportItem } from './parseCsv';
 
-// Google access tokens last about an hour; 403 usually means the People API is
-// off in the Cloud project or the contacts scope was declined.
-function explain(message: string): string {
-  if (message.includes('People API 401')) {
-    return 'Google session expired. Click "Connect Google" and sync again.';
+// Settings, the Import page and the background sync all mount this hook. One
+// run at a time, across all of them: two concurrent syncs would import the same
+// batch twice and push the same edits twice.
+let globalRun = false;
+
+function noConnection(): string {
+  switch (googleTokenReason()) {
+    case 'reconnect_required':
+      return 'Google revoked the connection. Click "Connect Google" to link it again.';
+    case 'not_configured':
+      return 'The google-token function is missing its Google client id/secret. See the README.';
+    default:
+      return 'Google not connected. Click "Connect Google" and try again.';
   }
-  if (message.includes('People API 403')) {
-    return (
-      'Google refused the request. Enable the People API in your Google Cloud project and ' +
-      'make sure you granted the contacts permission when connecting.'
-    );
-  }
-  return `Sync failed: ${message}`;
 }
 
 /**
- * The Google sync, shared by the Settings card and the Import page.
+ * The Google sync, shared by the Settings card, the Import page and the
+ * background sync.
  *
  * Pull first, then push whatever changed here since the last sync, so the run
  * ends with both sides equal and can report what it wrote into Google. The
  * Import page passes `push: false` - that card is an import, not a sync.
  *
  * When the batch contains contacts that were deleted here, `pending` is set and
- * nothing is written until the caller answers with `confirm`.
+ * nothing is written until the caller answers with `confirm`. A background run
+ * passes `skipDeleted` instead: it has no one to ask, so it leaves them out and
+ * the next interactive sync asks.
  */
 export function useGoogleSync() {
   const bulk = useBulkImport();
   const { data: profile } = useProfile();
   const updateProfile = useUpdateProfile();
   const [status, setStatus] = useState<string | null>(null);
+  /** Link that fixes whatever `status` is complaining about, when there is one. */
+  const [help, setHelp] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [outbound, setOutbound] = useState<OutboundReport | null>(null);
   const [batch, setBatch] = useState<{
@@ -47,6 +53,12 @@ export function useGoogleSync() {
   // bulk.isPending only covers the write; the fetch before it can take a while
   // and a second click there would import the same batch twice.
   const [running, setRunning] = useState(false);
+
+  function report(e: unknown) {
+    const { text, url } = describeGoogleError(e);
+    setStatus(text);
+    setHelp(url);
+  }
 
   async function importItems(items: ImportItem[], since: string | null) {
     const result = await bulk.mutateAsync({ items, source: 'google' });
@@ -69,55 +81,64 @@ export function useGoogleSync() {
     setStatus(null);
   }
 
-  async function run({ push = true }: { push?: boolean } = {}) {
-    if (running) return;
+  async function run({
+    push = true,
+    skipDeleted = false,
+  }: { push?: boolean; skipDeleted?: boolean } = {}) {
+    if (running || globalRun) return;
+    globalRun = true;
     setRunning(true);
     setSummary(null);
     setOutbound(null);
+    setHelp(null);
     // Read before the import: the pull itself touches rows (label backfill),
     // and those edits are Google's own, not ours to send back.
     const since = push ? profile?.google_last_synced ?? null : null;
     try {
       setStatus('Checking Google connection...');
-      const { data } = await supabase.auth.getSession();
-      // provider_token only survives the OAuth redirect itself; the stored copy
-      // covers every load after that.
-      const token = data.session?.provider_token ?? getGoogleToken();
+      const token = await getGoogleAccessToken();
       if (!token) {
-        setStatus('Google not connected in this session. Click "Connect Google" and try again.');
+        setStatus(noConnection());
         return;
       }
       setStatus('Syncing contacts from Google...');
       const all = await fetchGoogleContacts(token);
       const deleted = await findDeletedMatches(all);
-      if (deleted.length) {
+      if (deleted.length && !skipDeleted) {
         // Nothing is written until the prompt is answered.
         setBatch({ all, deleted, since });
         setStatus(null);
         return;
       }
-      await importItems(all, since);
+      const rejected = new Set(skipDeleted ? deleted : []);
+      await importItems(
+        rejected.size ? all.filter((i) => !rejected.has(i)) : all,
+        since,
+      );
     } catch (e) {
-      setStatus(explain((e as Error).message));
+      report(e);
     } finally {
+      globalRun = false;
       setRunning(false);
     }
   }
 
   async function confirm(approved: ImportItem[]) {
-    if (!batch || running) return;
+    if (!batch || running || globalRun) return;
     const approvedSet = new Set(approved);
     const rejected = new Set(batch.deleted.filter((d) => !approvedSet.has(d)));
     const items = batch.all.filter((i) => !rejected.has(i));
     const since = batch.since;
     setBatch(null);
+    globalRun = true;
     setRunning(true);
     try {
       setStatus('Importing...');
       await importItems(items, since);
     } catch (e) {
-      setStatus(explain((e as Error).message));
+      report(e);
     } finally {
+      globalRun = false;
       setRunning(false);
     }
   }
@@ -132,6 +153,7 @@ export function useGoogleSync() {
     confirm,
     cancel,
     status,
+    help,
     summary,
     outbound,
     pending: batch?.deleted ?? null,

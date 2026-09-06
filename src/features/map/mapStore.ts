@@ -8,6 +8,12 @@ export type LocationBasis = 'current' | 'origin';
 export type Grouping = 'country' | 'city';
 
 /**
+ * What a dot's colour means: the contacts' category (or the sublabel under a
+ * grouped filter), or the flag of the country the dot sits in.
+ */
+export type ColorBy = 'category' | 'flag';
+
+/**
  * Zoom at which dots split from country stacks into city stacks.
  *
  * Below it a whole country fits on screen and per-city dots collapse into an
@@ -22,12 +28,14 @@ interface MapState {
   locationBasis: LocationBasis;
   /** Driven by the map's zoom, not by the user. */
   grouping: Grouping;
+  colorBy: ColorBy;
   categories: Set<ContactCategory>; // empty = all
   countries: Set<string>; // empty = all
   tagId: string; // '' = all
   setViewMode: (m: ViewMode) => void;
   setLocationBasis: (b: LocationBasis) => void;
   setGrouping: (g: Grouping) => void;
+  setColorBy: (c: ColorBy) => void;
   toggleCategory: (c: ContactCategory) => void;
   toggleCountry: (code: string) => void;
   clearCountries: () => void;
@@ -38,12 +46,14 @@ export const useMapStore = create<MapState>((set) => ({
   viewMode: 'cosmopolitan',
   locationBasis: 'current',
   grouping: 'country',
+  colorBy: 'category',
   categories: new Set(),
   countries: new Set(),
   tagId: '',
   setViewMode: (viewMode) => set({ viewMode }),
   setLocationBasis: (locationBasis) => set({ locationBasis }),
   setGrouping: (grouping) => set({ grouping }),
+  setColorBy: (colorBy) => set({ colorBy }),
   toggleCategory: (c) =>
     set((s) => {
       const next = new Set(s.categories);

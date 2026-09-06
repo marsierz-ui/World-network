@@ -7,11 +7,20 @@ import { useMapData, type MapPoint } from '../features/map/useMapData';
 import { useMapStore } from '../features/map/mapStore';
 import { NetworkMap } from '../features/map/NetworkMap';
 import { GlobeMap } from '../features/map/GlobeMap';
+import { ChoroplethMap } from '../features/map/ChoroplethMap';
 import { MapFilters } from '../features/map/MapFilters';
 import { MapSearch } from '../features/map/MapSearch';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import { SocialLinks } from '../features/contacts/SocialLinks';
 import type { Contact, Tag } from '../lib/database.types';
+
+type MapKind = 'flat' | 'globe' | 'countries';
+
+const KINDS: [MapKind, string, string][] = [
+  ['flat', 'Flat', 'Dots per city or country'],
+  ['globe', 'Globe', 'The same dots on a globe'],
+  ['countries', 'Countries', 'Countries shaded by how many contacts they hold'],
+];
 
 export function MapPage() {
   const { data: contacts = [] } = useContacts();
@@ -27,7 +36,7 @@ export function MapPage() {
   // rebuilds every point, and a held object would leave the card pointing at a
   // stack that no longer exists.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mapKind, setMapKind] = useState<'flat' | 'globe'>('flat');
+  const [mapKind, setMapKind] = useState<MapKind>('flat');
   // The panel is tall enough to bury a phone screen, so start it collapsed there.
   const [panelOpen, setPanelOpen] = useState(() => window.innerWidth > 768);
   const [focus, setFocus] = useState<{ lng: number; lat: number; zoom: number } | null>(null);
@@ -42,12 +51,22 @@ export function MapPage() {
     [contacts, tagMap],
   );
 
-  const { points, filtered, legend } = useMapData(contactsWithTags, homeCountry, tags);
+  const { points, countryPoints, byCountry, filtered, legend } = useMapData(
+    contactsWithTags,
+    homeCountry,
+    tags,
+  );
+
+  // The choropleth is per country regardless of zoom, so the card and the
+  // selection ring have to read from its own points, not the zoom-driven ones.
+  const activePoints = mapKind === 'countries' ? countryPoints : points;
 
   const selected = useMemo(
     () =>
-      selectedId ? points.find((p) => p.contacts.some((c) => c.id === selectedId)) ?? null : null,
-    [points, selectedId],
+      selectedId
+        ? activePoints.find((p) => p.contacts.some((c) => c.id === selectedId)) ?? null
+        : null,
+    [activePoints, selectedId],
   );
 
   // Stable: it is a dependency of the deck.gl layer list, which would otherwise
@@ -72,7 +91,7 @@ export function MapPage() {
     return { longitude: 10, latitude: 25, zoom: 1.4 };
   }, [viewMode, homeCountry]);
 
-  const placed = points.reduce((n, p) => n + p.count, 0);
+  const placed = activePoints.reduce((n, p) => n + p.count, 0);
   const unplaced = contacts.length - placed;
 
   // Jump to whatever the user picked in search and open its card. The target is
@@ -87,7 +106,7 @@ export function MapPage() {
 
   return (
     <div className="map-page">
-      {mapKind === 'flat' ? (
+      {mapKind === 'flat' && (
         <NetworkMap
           key={`flat-${viewMode}-${homeCountry}`}
           points={points}
@@ -96,10 +115,21 @@ export function MapPage() {
           selected={selected}
           onSelect={select}
         />
-      ) : (
+      )}
+      {mapKind === 'globe' && (
         <GlobeMap
           key={`globe-${viewMode}-${homeCountry}`}
           points={points}
+          initialView={initialView}
+          focus={focus}
+          selected={selected}
+          onSelect={select}
+        />
+      )}
+      {mapKind === 'countries' && (
+        <ChoroplethMap
+          key={`countries-${viewMode}-${homeCountry}`}
+          byCountry={byCountry}
           initialView={initialView}
           focus={focus}
           selected={selected}
@@ -122,18 +152,16 @@ export function MapPage() {
           </div>
           <MapSearch contacts={contactsWithTags} tags={tags} onPick={goToContact} />
           <div className="view-toggle kind-toggle">
-            <button
-              className={mapKind === 'flat' ? 'seg active' : 'seg'}
-              onClick={() => setMapKind('flat')}
-            >
-              Flat
-            </button>
-            <button
-              className={mapKind === 'globe' ? 'seg active' : 'seg'}
-              onClick={() => setMapKind('globe')}
-            >
-              Globe
-            </button>
+            {KINDS.map(([kind, label, title]) => (
+              <button
+                key={kind}
+                className={mapKind === kind ? 'seg active' : 'seg'}
+                onClick={() => setMapKind(kind)}
+                title={title}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <MapFilters tags={tags} countriesPresent={countriesPresent} />
           {legend.length > 0 && (

@@ -136,7 +136,17 @@ function GoogleImport() {
         </button>
         <button className="link" onClick={signInWithGoogle}>Reconnect Google</button>
       </div>
-      {sync.status && <div className="muted">{sync.status}</div>}
+      {sync.status && (
+        <div className="muted">
+          {sync.status}
+          {sync.help && (
+            <>
+              {' '}
+              <a href={sync.help} target="_blank" rel="noreferrer">Open the setting</a>
+            </>
+          )}
+        </div>
+      )}
       {sync.summary && (
         <div className="summary">
           Imported {sync.summary.inserted} ({sync.summary.placed} placed on map), skipped{' '}

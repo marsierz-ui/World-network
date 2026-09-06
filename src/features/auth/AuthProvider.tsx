@@ -1,7 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabase';
-import { setGoogleToken } from '../import/googleToken';
+import {
+  clearGoogleToken,
+  rememberGoogleRefreshToken,
+  setGoogleToken,
+} from '../import/googleToken';
 import { AuthContext, type AuthState } from './authContext';
 
 // Full contacts scope, not contacts.readonly: the import reads the People API,
@@ -13,20 +17,35 @@ const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/contacts';
 // '/World-network/' in production and '/' in dev.
 const APP_URL = window.location.origin + import.meta.env.BASE_URL;
 
+/**
+ * Both Google tokens exist on exactly one page load: the one that handles the
+ * OAuth redirect. The access token covers this tab; the refresh token is handed
+ * to the Edge Function, which is what keeps the connection alive afterwards.
+ */
+function captureGoogleTokens(session: Session | null) {
+  if (session?.provider_token) setGoogleToken(session.provider_token);
+  if (session?.provider_refresh_token) {
+    void rememberGoogleRefreshToken(session.provider_refresh_token);
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      // Present only on the load that handles the OAuth redirect.
-      if (data.session?.provider_token) setGoogleToken(data.session.provider_token);
+      captureGoogleTokens(data.session);
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      if (s?.provider_token) setGoogleToken(s.provider_token);
-      if (event === 'SIGNED_OUT') setGoogleToken(null);
+      // Deferred: supabase-js warns against calling back into the client from
+      // inside this callback, and captureGoogleTokens invokes an Edge Function.
+      setTimeout(() => {
+        if (event === 'SIGNED_OUT') clearGoogleToken();
+        else captureGoogleTokens(s);
+      }, 0);
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();

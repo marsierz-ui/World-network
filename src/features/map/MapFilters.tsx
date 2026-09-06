@@ -11,6 +11,8 @@ export function MapFilters({ tags, countriesPresent }: { tags: Tag[]; countriesP
   const categories = useMapStore((s) => s.categories);
   const countries = useMapStore((s) => s.countries);
   const tagId = useMapStore((s) => s.tagId);
+  const colorBy = useMapStore((s) => s.colorBy);
+  const setColorBy = useMapStore((s) => s.setColorBy);
   const setViewMode = useMapStore((s) => s.setViewMode);
   const setLocationBasis = useMapStore((s) => s.setLocationBasis);
   const toggleCategory = useMapStore((s) => s.toggleCategory);
@@ -60,6 +62,32 @@ export function MapFilters({ tags, countriesPresent }: { tags: Tag[]; countriesP
           <div className="muted small">
             Origin is a country, not a city, so contacts sit on the country centre - one dot per
             country.
+          </div>
+        )}
+      </div>
+
+      <div className="filter-group">
+        <div className="section-label">Colour dots by</div>
+        <div className="view-toggle">
+          <button
+            className={colorBy === 'category' ? 'seg active' : 'seg'}
+            onClick={() => setColorBy('category')}
+            title="Work / private / other, or the sublabel under a filtered label"
+          >
+            Category
+          </button>
+          <button
+            className={colorBy === 'flag' ? 'seg active' : 'seg'}
+            onClick={() => setColorBy('flag')}
+            title="The colours of the flag of the country the dot sits in"
+          >
+            Flag
+          </button>
+        </div>
+        {colorBy === 'flag' && (
+          <div className="muted small">
+            Fill and ring are the two main colours of the flag. Dots with no country keep their
+            category colour.
           </div>
         )}
       </div>

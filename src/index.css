@@ -79,6 +79,7 @@ input, select {
 
 .muted { color: var(--text-dim); font-size: 0.85em; }
 .error { color: var(--danger); font-size: 0.9em; }
+.warn-text { color: var(--work); }
 .center-screen { display: grid; place-items: center; height: 100%; }
 
 /* ---- login ---- */
@@ -114,6 +115,9 @@ input, select {
 .sidebar a.active { background: var(--panel-2); color: var(--text); font-weight: 600; }
 .sidebar .spacer { flex: 1; }
 .sidebar .user { font-size: 0.8em; color: var(--text-dim); padding: 0 10px; }
+.sidebar .sync-note { font-size: 0.78em; color: var(--text-dim); padding: 4px 10px; }
+/* Overrides .sidebar a, which the warning variant is. */
+.sidebar a.sync-note.warn { color: var(--work); font-size: 0.78em; padding: 4px 10px; }
 .content { overflow: auto; position: relative; }
 
 .page-pad { padding: 24px; }
@@ -634,6 +638,21 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .map-legend { margin-top: 12px; }
 .legend-row { display: flex; align-items: center; gap: 7px; font-size: 0.82em; margin-top: 4px; }
 .legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+
+/* ---- choropleth scale ---- */
+.map-scale {
+  position: absolute; bottom: 12px; left: 12px; z-index: 3; pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+  backdrop-filter: blur(6px);
+}
+.scale-row { display: flex; gap: 10px; margin-top: 4px; }
+.scale-step { display: flex; align-items: center; gap: 5px; font-size: 0.78em; color: var(--text-dim); }
+.scale-swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.map-empty {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  gap: 4px; color: var(--text-dim); font-size: 0.9em; padding: 24px; text-align: center;
+}
 
 /* ---- suggestion options ---- */
 .sugg-options { display: flex; flex-wrap: wrap; gap: 6px; }

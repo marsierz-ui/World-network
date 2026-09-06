@@ -35,6 +35,9 @@ export function useMergeContacts() {
         .map((t) => ({ contact_id: survivor.id, tag_id: t.tag_id, user_id: u.user!.id }));
       if (toAdd.length) await supabase.from('contact_tags').insert(toAdd);
 
+      // Deliberately a plain delete, not the one that propagates to Google: the
+      // survivor may have just adopted the dup's Google link above, and deleting
+      // the dup there would delete the contact the survivor now points at.
       const { error: delErr } = await supabase.from('contacts').delete().eq('id', dup.id);
       if (delErr) throw delErr;
     },

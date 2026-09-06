@@ -1,6 +1,7 @@
 import type { ContactInput } from '../contacts/useContacts';
 import { findCountry } from '../../lib/countries';
 import { PERSON_FIELDS, personToDetails, type GooglePerson } from './googlePerson';
+import { googleApiError } from './googleError';
 
 interface ConnectionsResponse {
   connections?: GooglePerson[];
@@ -30,7 +31,7 @@ async function fetchLabelNames(accessToken: string): Promise<Map<string, string>
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) throw new Error(`People API ${res.status}: ${await res.text()}`);
+    if (!res.ok) throw googleApiError(res.status, await res.text());
     const data: { contactGroups?: ContactGroup[]; nextPageToken?: string } = await res.json();
 
     for (const g of data.contactGroups ?? []) {
@@ -63,9 +64,7 @@ export async function fetchGoogleContacts(accessToken: string): Promise<GoogleCo
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!res.ok) {
-      throw new Error(`People API ${res.status}: ${await res.text()}`);
-    }
+    if (!res.ok) throw googleApiError(res.status, await res.text());
     const data: ConnectionsResponse = await res.json();
 
     for (const p of data.connections ?? []) {

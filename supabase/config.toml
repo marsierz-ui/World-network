@@ -28,12 +28,17 @@ enable_signup = true
 enable_confirmations = false
 
 # Google OAuth — set GOOGLE_CLIENT_ID / GOOGLE_SECRET in your environment.
-# Request the contacts.readonly scope to enable the People API import.
+# Enable the People API in that Cloud project, and request the read/write contacts scope.
 [auth.external.google]
 enabled = true
 client_id = "env(GOOGLE_CLIENT_ID)"
 secret = "env(GOOGLE_SECRET)"
 redirect_uri = "http://localhost:54321/auth/v1/callback"
+
+[functions.google-token]
+# Keeps the Google connection alive by exchanging the stored refresh token.
+# verify_jwt stays on: the function reads and writes the caller's own row.
+verify_jwt = true
 
 [storage]
 enabled = true

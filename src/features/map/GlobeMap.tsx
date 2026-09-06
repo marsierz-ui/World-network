@@ -39,6 +39,12 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
           count: p.count,
           label: p.count > 1 ? String(p.count) : '',
           color: `rgb(${p.color.join(',')})`,
+          // Flag colouring gives each dot its own ring; without one it falls back
+          // to the theme outline that keeps dots off the basemap.
+          ring: p.ring ? `rgb(${p.ring.join(',')})` : null,
+          ringWidth: p.ring ? 2.5 : 1.5,
+          // See NetworkMap: pastel flags are not recognisable flags.
+          opacity: p.ring ? 0.9 : 0.7,
           radius: p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2,
         },
       })),
@@ -106,10 +112,10 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
           type="circle"
           paint={{
             'circle-color': ['get', 'color'],
-            'circle-opacity': 0.7,
+            'circle-opacity': ['get', 'opacity'],
             'circle-radius': ['get', 'radius'],
-            'circle-stroke-width': 1.5,
-            'circle-stroke-color': outline,
+            'circle-stroke-width': ['get', 'ringWidth'],
+            'circle-stroke-color': ['coalesce', ['get', 'ring'], outline],
             'circle-stroke-opacity': 0.9,
           }}
         />

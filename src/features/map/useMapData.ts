@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import type { Contact, Tag } from '../../lib/database.types';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
+import { FLAG_COLORS } from '../../lib/flagColors';
 import { CATEGORY_RGB } from './mapIcons';
-import { useMapStore, type LocationBasis } from './mapStore';
+import { useMapStore, type ColorBy, type LocationBasis } from './mapStore';
 
 type Tagged = Contact & { tag_ids?: string[] };
 
@@ -16,6 +17,8 @@ export interface MapPoint {
   city: string | null;
   /** Dot colour: category by default, sublabel colour under a grouped filter. */
   color: [number, number, number];
+  /** Ring colour, when the dot carries one of its own (the flag's second colour). */
+  ring: [number, number, number] | null;
   /** Which sublabel drove the colour, for the legend. */
   colorLabel: string | null;
 }
@@ -59,14 +62,28 @@ function dominantCategory(list: Contact[]) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0] as Contact['category'];
 }
 
-function toPoint(list: Contact[], sublabels?: Map<string, Tag>): MapPoint {
+function toPoint(
+  list: Contact[],
+  sublabels?: Map<string, Tag>,
+  colorBy: ColorBy = 'category',
+): MapPoint {
   // Anchor on a contact that has a country, so a half-filled record does not
   // drag the dot away from the city the rest of the group agrees on.
   const anchor = list.find((c) => c.current_country) ?? list[0];
 
   let color = CATEGORY_RGB[dominantCategory(list)];
+  let ring: [number, number, number] | null = null;
   let colorLabel: string | null = null;
-  if (sublabels?.size) {
+
+  // Flag colouring wins outright: it is a deliberate choice about what the map
+  // is showing, so a tag filter must not quietly repaint it.
+  const flag = colorBy === 'flag' ? FLAG_COLORS[anchor.current_country ?? ''] : undefined;
+  if (flag?.length) {
+    color = hexToRgb(flag[0]);
+    // The second colour as the ring: one flat fill makes France and the
+    // Netherlands the same dot, and the ring is what separates them.
+    if (flag[1]) ring = hexToRgb(flag[1]);
+  } else if (sublabels?.size) {
     // Colour by the sublabel most represented at this point.
     const counts = new Map<string, number>();
     for (const c of list as Tagged[]) {
@@ -90,6 +107,7 @@ function toPoint(list: Contact[], sublabels?: Map<string, Tag>): MapPoint {
     country: anchor.current_country ?? null,
     city: anchor.current_city ?? null,
     color,
+    ring,
     colorLabel,
   };
 }
@@ -98,7 +116,11 @@ function toPoint(list: Contact[], sublabels?: Map<string, Tag>): MapPoint {
  * Group placed contacts into one dot per city. Exported so the grouping rules
  * can be exercised directly; the hook below just memoises it.
  */
-export function groupIntoPoints(placed: Contact[], sublabels?: Map<string, Tag>): MapPoint[] {
+export function groupIntoPoints(
+  placed: Contact[],
+  sublabels?: Map<string, Tag>,
+  colorBy: ColorBy = 'category',
+): MapPoint[] {
   // Group by city first. Grouping on raw coordinates alone hid people:
   // two contacts in Dublin a couple of km apart became separate dots
   // stacked on the same pixel, so whichever drew second was invisible.
@@ -134,7 +156,9 @@ export function groupIntoPoints(placed: Contact[], sublabels?: Map<string, Tag>)
     }
 
     for (const sub of subgroups) {
-      for (const cluster of splitByDistance(sub)) out.push(toPoint(cluster, sublabels));
+      for (const cluster of splitByDistance(sub)) {
+        out.push(toPoint(cluster, sublabels, colorBy));
+      }
     }
   }
   return out;
@@ -148,6 +172,7 @@ export function groupIntoPoints(placed: Contact[], sublabels?: Map<string, Tag>)
 export function groupIntoCountryPoints(
   placed: Contact[],
   sublabels?: Map<string, Tag>,
+  colorBy: ColorBy = 'category',
 ): MapPoint[] {
   const byCountry = new Map<string, Contact[]>();
   const noCountry: Contact[] = [];
@@ -163,7 +188,7 @@ export function groupIntoCountryPoints(
 
   const out: MapPoint[] = [];
   for (const [code, list] of byCountry) {
-    const point = toPoint(list, sublabels);
+    const point = toPoint(list, sublabels, colorBy);
     const centre = COUNTRY_BY_CODE.get(code);
     if (centre) {
       point.lng = centre.lng;
@@ -175,7 +200,7 @@ export function groupIntoCountryPoints(
   }
   // Contacts with coordinates but no country still need a dot; they group by
   // city as usual rather than vanishing until the zoom crosses over.
-  out.push(...groupIntoPoints(noCountry, sublabels));
+  out.push(...groupIntoPoints(noCountry, sublabels, colorBy));
   return out;
 }
 
@@ -206,6 +231,7 @@ export function useMapData(contacts: Contact[], homeCountry: string | null, tags
   const viewMode = useMapStore((s) => s.viewMode);
   const locationBasis = useMapStore((s) => s.locationBasis);
   const grouping = useMapStore((s) => s.grouping);
+  const colorBy = useMapStore((s) => s.colorBy);
   const categories = useMapStore((s) => s.categories);
   const countries = useMapStore((s) => s.countries);
   const tagId = useMapStore((s) => s.tagId);
@@ -237,18 +263,37 @@ export function useMapData(contacts: Contact[], homeCountry: string | null, tags
     return out;
   }, [contacts, categories, countries, viewMode, homeCountry, wantedTagIds, locationBasis]);
 
+  // Always computed, because the choropleth is per country whatever the zoom is
+  // doing. The zoomed-out flat/globe maps then reuse it instead of grouping twice.
+  const countryPoints = useMemo(
+    () => groupIntoCountryPoints(filtered, sublabels, colorBy),
+    [filtered, sublabels, colorBy],
+  );
+
   const points = useMemo(
     () =>
       grouping === 'country'
-        ? groupIntoCountryPoints(filtered, sublabels)
-        : groupIntoPoints(filtered, sublabels),
-    [filtered, sublabels, grouping],
+        ? countryPoints
+        : groupIntoPoints(filtered, sublabels, colorBy),
+    [filtered, sublabels, grouping, colorBy, countryPoints],
   );
 
+  /** Country code -> that country's stack. Contacts with no country are left out. */
+  const byCountry = useMemo(() => {
+    const m = new Map<string, MapPoint>();
+    for (const p of countryPoints) if (p.country) m.set(p.country, p);
+    return m;
+  }, [countryPoints]);
+
+  // Nothing to explain in flag mode: the colours are the flags, and the country
+  // is already on the hover readout.
   const legend = useMemo(
-    () => [...sublabels.values()].filter((t) => points.some((p) => p.colorLabel === t.name)),
-    [sublabels, points],
+    () =>
+      colorBy === 'flag'
+        ? []
+        : [...sublabels.values()].filter((t) => points.some((p) => p.colorLabel === t.name)),
+    [sublabels, points, colorBy],
   );
 
-  return { points, filtered, legend };
+  return { points, countryPoints, byCountry, filtered, legend };
 }

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { geocode } from '../../lib/geocode';
-import { enqueueGoogleSync } from '../import/googleQueue';
+import { enqueueGoogleDelete, enqueueGoogleSync } from '../import/googleQueue';
 import type { Contact, ContactDetails, FieldDefinition } from '../../lib/database.types';
 
 const CONTACT_COLUMNS =
@@ -158,11 +158,25 @@ export function useDeleteContact() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('contacts').delete().eq('id', id);
+      // Returning the deleted row is what makes the Google delete possible: the
+      // resource name has to be read before the row disappears, and doing it in
+      // the same statement means no extra round-trip and no race.
+      const { data, error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', id)
+        .select('id,full_name,external_ids')
+        // maybeSingle, not single: deleting a row that is already gone (a
+        // double-click, a stale list) is a no-op, not an error.
+        .maybeSingle();
       if (error) throw error;
-      return id;
+      return { id, deleted: data as Pick<Contact, 'full_name' | 'external_ids'> | null };
     },
-    onSuccess: (id) => {
+    onSuccess: ({ id, deleted }) => {
+      const resourceName = deleted?.external_ids?.google;
+      if (typeof resourceName === 'string' && resourceName) {
+        enqueueGoogleDelete(deleted!.full_name, resourceName);
+      }
       qc.setQueryData<Contact[]>(['contacts'], (old) => old?.filter((c) => c.id !== id));
       qc.invalidateQueries({
         predicate: (q) => ['contact_tags', 'contact_events'].includes(q.queryKey[0] as string),
@@ -171,7 +185,10 @@ export function useDeleteContact() {
   });
 }
 
-// Delete all of the current user's contacts (contact_tags + location_history cascade).
+// Delete all of the current user's contacts (contact_tags + location_history
+// cascade). Deliberately local-only: a single click emptying an entire Google
+// address book is a blast radius no undo covers, and the next sync pulls the
+// contacts back rather than losing them.
 export function useDeleteAllContacts() {
   const qc = useQueryClient();
   return useMutation({

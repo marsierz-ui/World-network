@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase';
-import { getGoogleToken } from './googleToken';
+import { getGoogleAccessToken } from './googleToken';
+import { GoogleApiError, googleApiError } from './googleError';
 import {
   PERSON_FIELDS,
   detailsToPerson,
@@ -15,7 +16,8 @@ export type PushResult =
   | 'no-token' // Google not connected in this browser session
   | 'unchanged' // nothing we hold differs from Google's copy
   | 'updated'
-  | 'created';
+  | 'created'
+  | 'deleted';
 
 export function googleResourceName(contact: Contact): string | null {
   const rn = contact.external_ids?.google;
@@ -35,18 +37,10 @@ async function call(token: string, url: URL, init?: RequestInit): Promise<Respon
       ...init?.headers,
     },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    // A write with a contacts.readonly token lands here. Tokens granted before
-    // two-way sync existed are read-only, so this is the common first failure.
-    if (res.status === 403) {
-      throw new Error(
-        'Google refused the write. Click "Connect Google" to re-grant access with ' +
-          `permission to edit contacts. (${text.slice(0, 200)})`,
-      );
-    }
-    throw new Error(`People API ${res.status}: ${text}`);
-  }
+  // 403 here is usually a write attempted with a contacts.readonly token, or the
+  // People API switched off in the Cloud project; googleError.ts tells them
+  // apart from the response body and carries the fix.
+  if (!res.ok) throw googleApiError(res.status, await res.text());
   return res;
 }
 
@@ -62,8 +56,7 @@ async function openGate(known?: string): Promise<Gate> {
     .single();
   if (!profile?.google_sync_enabled) return { blocked: 'disabled' };
 
-  const { data: sess } = await supabase.auth.getSession();
-  const token = sess.session?.provider_token ?? getGoogleToken();
+  const token = await getGoogleAccessToken();
   if (!token) return { blocked: 'no-token' };
   return { token };
 }
@@ -163,6 +156,33 @@ export async function createContactInGoogle(
   const created: GooglePerson = await res.json();
 
   return { result: 'created', resourceName: created.resourceName ?? null };
+}
+
+/**
+ * Delete the Google contact this one was imported from.
+ *
+ * Only ever called for a contact that is being deleted here, and only for one
+ * carrying a Google resource name - a local-only contact has nothing to delete
+ * there. Google moves it to its own 30-day trash, so a mistake is recoverable
+ * from contacts.google.com.
+ */
+export async function deleteContactInGoogle(
+  resourceName: string,
+  token?: string,
+): Promise<PushResult> {
+  const gate = await openGate(token);
+  if (gate.blocked) return gate.blocked;
+
+  const url = new URL(`https://people.googleapis.com/v1/${resourceName}:deleteContact`);
+  try {
+    await call(gate.token, url, { method: 'DELETE' });
+  } catch (e) {
+    // Already gone there - deleted in Google first, or deleted here twice.
+    // Nothing to report and nothing to retry.
+    if (e instanceof GoogleApiError && (e.status === 404 || e.status === 410)) return 'unchanged';
+    throw e;
+  }
+  return 'deleted';
 }
 
 /** What a sync wrote into Google Contacts, by contact name. */

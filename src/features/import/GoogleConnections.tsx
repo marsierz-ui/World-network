@@ -1,21 +1,55 @@
+import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/authContext';
 import { useProfile, useUpdateProfile } from '../profile/useProfile';
 import { ReimportPrompt } from './ReimportPrompt';
 import { useGoogleSync } from './useGoogleSync';
+import { disconnectGoogle, getGoogleLinkState, type LinkState } from './googleToken';
 import type { OutboundReport } from './googlePush';
+
+// What each connection state means, in the user's terms, plus whether syncing
+// can work at all in that state.
+const LINK_TEXT: Record<LinkState, string> = {
+  linked: 'Connected permanently. Syncs on its own every 15 minutes while the app is open.',
+  'session-only':
+    'Connected for this browser tab only - the link expires within the hour. Deploy the ' +
+    'google-token function (see README) to keep it connected permanently.',
+  'not-configured':
+    'The google-token function is deployed but has no Google client id/secret, so it cannot ' +
+    'refresh the connection. Set them with `supabase secrets set` (see README).',
+  unavailable:
+    'Not connected, and the google-token function is not reachable. Click "Connect Google" to ' +
+    'sync in this tab.',
+  none: 'Not connected. Click "Connect Google".',
+};
 
 export function GoogleConnections() {
   const { signInWithGoogle, session } = useAuth();
   const { data: profile } = useProfile();
   const updateProfile = useUpdateProfile();
   const sync = useGoogleSync();
+  const [link, setLink] = useState<LinkState | null>(null);
 
   const enabled = profile?.google_sync_enabled ?? false;
   const lastSynced = profile?.google_last_synced;
   const isGoogle = session?.user.app_metadata.provider === 'google';
 
+  // Re-read after a sync: a run is when a dead refresh token is discovered and
+  // dropped, and the card would otherwise keep claiming a live connection.
+  useEffect(() => {
+    let live = true;
+    getGoogleLinkState().then((s) => live && setLink(s));
+    return () => {
+      live = false;
+    };
+  }, [sync.busy]);
+
   function toggle() {
     updateProfile.mutate({ google_sync_enabled: !enabled });
+  }
+
+  async function disconnect() {
+    await disconnectGoogle();
+    setLink(await getGoogleLinkState());
   }
 
   const s = sync.summary;
@@ -35,8 +69,16 @@ export function GoogleConnections() {
           <span className="slider" />
         </label>
       </div>
+
+      {link && (
+        <div className={link === 'linked' ? 'muted' : 'muted warn-text'}>{LINK_TEXT[link]}</div>
+      )}
+
       <div className="actions-row">
         <button className="link" onClick={signInWithGoogle}>Connect Google</button>
+        {link === 'linked' && (
+          <button className="link" onClick={disconnect}>Disconnect</button>
+        )}
         <button onClick={() => sync.run()} disabled={!enabled || sync.busy}>
           {sync.busy ? 'Syncing...' : 'Sync now'}
         </button>
@@ -44,7 +86,17 @@ export function GoogleConnections() {
       {!enabled && (
         <div className="muted">Turn the switch on to enable syncing, then click Sync now.</div>
       )}
-      {sync.status && <div className="muted">{sync.status}</div>}
+      {sync.status && (
+        <div className="muted">
+          {sync.status}
+          {sync.help && (
+            <>
+              {' '}
+              <a href={sync.help} target="_blank" rel="noreferrer">Open the setting</a>
+            </>
+          )}
+        </div>
+      )}
       {s && (
         <div className="muted">
           Synced: {s.inserted} added, {s.skipped} already present
@@ -54,14 +106,11 @@ export function GoogleConnections() {
       )}
       {sync.outbound && <OutboundNote report={sync.outbound} />}
       <p className="muted small">
-        Pull is on-demand (runs when you click, or right after connecting Google). Automatic
-        background sync requires a server component and is planned.
-      </p>
-      <p className="muted small">
-        While the switch is on, contacts you add here are created in Google, and edits to a
-        Google-linked contact are written back. Only fields holding a value are pushed - clearing a
-        field here leaves Google's copy alone, and deleting a contact here never deletes it from
-        Google. Because Google keeps it, the next sync asks before bringing it back.
+        While the switch is on, contacts you add here are created in Google, edits to a
+        Google-linked contact are written back, and deleting a contact here deletes it in Google
+        too (it lands in Google's own trash for 30 days). Only fields holding a value are pushed -
+        clearing a field here leaves Google's copy alone. "Clear all" on the Contacts page is the
+        one exception: it never touches Google.
       </p>
 
       {sync.pending && (

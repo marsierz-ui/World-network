@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '../../lib/supabase';
 import {
   createContactInGoogle,
+  deleteContactInGoogle,
   googleResourceName,
   pushContactToGoogle,
   type PushResult,
@@ -52,6 +53,25 @@ export function enqueueGoogleSync(
   chain = chain
     .then(() => run(contact, mode, onLinked))
     .catch(() => {}) // a failed push must not stall everything queued behind it
+    .finally(() => setState((s) => ({ pending: s.pending - 1 })));
+}
+
+/**
+ * Delete the Google contact behind a row that was just deleted here.
+ *
+ * The resource name is captured from the deleted row rather than looked up
+ * afterwards - by the time this runs the local row is gone.
+ */
+export function enqueueGoogleDelete(name: string, resourceName: string) {
+  setState((s) => ({ pending: s.pending + 1 }));
+  chain = chain
+    .then(async () => {
+      try {
+        setState({ last: { name, result: await deleteContactInGoogle(resourceName), error: null } });
+      } catch (e) {
+        setState({ last: { name, result: 'failed', error: (e as Error).message } });
+      }
+    })
     .finally(() => setState((s) => ({ pending: s.pending - 1 })));
 }
 
