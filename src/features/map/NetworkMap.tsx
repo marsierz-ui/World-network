@@ -3,6 +3,7 @@ import { Map, useControl, type MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { MapPoint } from './useMapData';
+import { flagBandRadius } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap, useMarkerOutline } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
@@ -49,6 +50,11 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
 
   const stacks = useMemo(() => points.filter((p) => p.count > 1), [points]);
   const selectedRing = useMemo(() => (selected ? [selected] : []), [selected]);
+  // The 2nd and 3rd flag colours each get their own smaller disc stacked on top
+  // of the base circle (see flagBandRadius) instead of a stroke, so a two- or
+  // three-colour flag fills the whole dot as concentric bands.
+  const flagBand2 = useMemo(() => points.filter((p) => (p.flagColors?.length ?? 0) >= 2), [points]);
+  const flagBand3 = useMemo(() => points.filter((p) => (p.flagColors?.length ?? 0) >= 3), [points]);
 
   const layers = useMemo(
     () => [
@@ -67,19 +73,52 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         // dots from hiding the basemap, a flag's colours wash out into pastels
         // and stop being recognisable as that flag.
         getFillColor: (d) =>
-          [...d.color, d.ring ? 225 : 170] as [number, number, number, number],
-        // Flag colouring gives the dot its own ring (the flag's second colour);
-        // otherwise the ring is there to separate the dot from the basemap.
-        getLineColor: (d) =>
-          d.ring ? ([...d.ring, 255] as [number, number, number, number]) : outline,
-        getLineWidth: (d) => (d.ring ? 2.5 : 1.5),
+          [...(d.flagColors?.[0] ?? d.color), d.flagColors ? 235 : 170] as [
+            number,
+            number,
+            number,
+            number,
+          ],
+        // A plain contrast edge, the same whether or not the dot is flag
+        // coloured: the flag no longer lives in the stroke, so it never has to
+        // compete with it.
+        getLineColor: outline,
+        getLineWidth: 1.5,
         radiusMinPixels: 4,
         radiusMaxPixels: 28,
         autoHighlight: true,
         highlightColor: [255, 255, 255, 90],
         onClick: (info) => onSelect((info.object as MapPoint) ?? null),
         onHover: (info) => setHovered((info.object as MapPoint) ?? null),
-        updateTriggers: { getLineColor: [theme, points], getFillColor: points, getLineWidth: points },
+        updateTriggers: { getLineColor: [theme, points], getFillColor: points },
+      }),
+      new ScatterplotLayer<MapPoint>({
+        id: 'contacts-flag-band-2',
+        data: flagBand2,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        radiusUnits: 'pixels',
+        getPosition: (d) => [d.lng, d.lat],
+        getRadius: (d) => flagBandRadius(radiusFor(d), 1, d.flagColors!.length),
+        getFillColor: (d) => [...d.flagColors![1], 235] as [number, number, number, number],
+        radiusMinPixels: 4,
+        radiusMaxPixels: 28,
+        updateTriggers: { getRadius: flagBand2, getFillColor: flagBand2 },
+      }),
+      new ScatterplotLayer<MapPoint>({
+        id: 'contacts-flag-band-3',
+        data: flagBand3,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        radiusUnits: 'pixels',
+        getPosition: (d) => [d.lng, d.lat],
+        getRadius: (d) => flagBandRadius(radiusFor(d), 2, d.flagColors!.length),
+        getFillColor: (d) => [...d.flagColors![2], 235] as [number, number, number, number],
+        radiusMinPixels: 4,
+        radiusMaxPixels: 28,
+        updateTriggers: { getRadius: flagBand3, getFillColor: flagBand3 },
       }),
       // Ring marking the open point, so the card and the map agree.
       new ScatterplotLayer<MapPoint>({
@@ -109,7 +148,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         getAlignmentBaseline: 'center',
       }),
     ],
-    [points, stacks, selectedRing, onSelect, outline, theme],
+    [points, stacks, selectedRing, flagBand2, flagBand3, onSelect, outline, theme],
   );
 
   return (
