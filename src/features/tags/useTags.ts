@@ -129,3 +129,24 @@ export function useSetContactTags() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['contact_tags'] }),
   });
 }
+
+// Add one tag to many contacts. Contacts that already carry it are left alone
+// rather than erroring on the (contact_id, tag_id) primary key.
+export function useAddTagToContacts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ contactIds, tagId }: { contactIds: string[]; tagId: string }) => {
+      const { data: u } = await supabase.auth.getUser();
+      const rows = contactIds.map((contact_id) => ({
+        contact_id,
+        tag_id: tagId,
+        user_id: u.user!.id,
+      }));
+      const { error } = await supabase
+        .from('contact_tags')
+        .upsert(rows, { onConflict: 'contact_id,tag_id', ignoreDuplicates: true });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['contact_tags'] }),
+  });
+}

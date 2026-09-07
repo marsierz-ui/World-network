@@ -6,6 +6,7 @@ import { ContactForm } from '../features/contacts/ContactForm';
 import { CustomFieldsManager } from '../features/contacts/CustomFieldsManager';
 import { SuggestionsPanel } from '../features/contacts/SuggestionsPanel';
 import { MergeDuplicates } from '../features/contacts/MergeDuplicates';
+import { BulkEditBar } from '../features/contacts/BulkEditBar';
 import { findDuplicateGroups } from '../features/contacts/matchContacts';
 import { TagAssigner } from '../features/tags/TagAssigner';
 import { InlineTags } from '../features/tags/InlineTags';
@@ -21,6 +22,8 @@ import {
   useUpdateContact,
   type ContactInput,
 } from '../features/contacts/useContacts';
+
+type SortKey = 'name' | 'newest' | 'oldest';
 
 // Stable identity so a contact with no tags does not break ContactRow's memo.
 const NO_TAGS: string[] = [];
@@ -42,6 +45,8 @@ export function ContactsPage() {
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [sort, setSort] = useState<SortKey>('name');
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   // Which contact the editor shows lives in the URL, so /contacts?id=... from
   // the map and the history page is the same code path as clicking a row, and
@@ -94,6 +99,17 @@ export function ContactsPage() {
     [createTagMutate],
   );
 
+  const onToggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
   function clearAll() {
     if (contacts.length === 0) return;
     if (window.confirm(`Delete all ${contacts.length} contacts? This cannot be undone.`)) {
@@ -132,7 +148,7 @@ export function ContactsPage() {
     const norm = (s: string) =>
       s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
     const q = norm(query);
-    return contacts.filter((c) => {
+    const rows = contacts.filter((c) => {
       if (unplacedOnly && c.current_lng != null && c.current_lat != null) return false;
       if (!q) return true;
       return (
@@ -143,7 +159,25 @@ export function ContactsPage() {
         norm(c.notes ?? '').includes(q)
       );
     });
-  }, [contacts, query, unplacedOnly]);
+    if (sort === 'name') return rows;
+    // created_at is an ISO timestamp, so string order is chronological order.
+    return [...rows].sort((a, b) =>
+      sort === 'newest' ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at),
+    );
+  }, [contacts, query, unplacedOnly, sort]);
+
+  const visibleIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+
+  function toggleSelectAll() {
+    setSelected(allVisibleSelected ? new Set() : new Set(visibleIds));
+  }
+
+  // A contact can be selected and then filtered away; only act on what is shown.
+  const selectedIds = useMemo(
+    () => visibleIds.filter((id) => selected.has(id)),
+    [visibleIds, selected],
+  );
 
   function handleSubmit(input: ContactInput) {
     if (editing) {
@@ -176,6 +210,16 @@ export function ContactsPage() {
           >
             Unplaced {unplacedCount}
           </button>
+          <select
+            className="sort-select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            title="Sort order"
+          >
+            <option value="name">Name A-Z</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
           <button onClick={() => { setAdding(true); setOpenId(null); }}>+ Add</button>
           {dupCount > 0 && (
             <button className="toggle" onClick={() => setMerging(true)}>
@@ -195,12 +239,22 @@ export function ContactsPage() {
 
         <SuggestionsPanel contacts={contacts} />
 
+        {selectedIds.length > 0 && <BulkEditBar ids={selectedIds} onClear={clearSelection} />}
+
         {isLoading ? (
           <div className="muted">Loading...</div>
         ) : (
           <table className="contacts-table">
             <thead>
               <tr>
+                <th className="pick-cell">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAll}
+                    title="Select all shown"
+                  />
+                </th>
                 <th>Name</th><th>Category</th><th>City</th><th>Country</th>
                 <th>Tags</th><th>Phone</th><th>Notes</th><th></th>
               </tr>
@@ -212,6 +266,8 @@ export function ContactsPage() {
                   contact={c}
                   tags={tags}
                   assigned={tagMap[c.id] ?? NO_TAGS}
+                  selected={selected.has(c.id)}
+                  onToggleSelect={onToggleSelect}
                   onOpen={onOpen}
                   onCategory={onCategory}
                   onNotes={onNotes}
@@ -222,7 +278,7 @@ export function ContactsPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={9} className="muted">
                     {contacts.length === 0
                       ? 'No contacts yet. Add one or import.'
                       : `No match for "${query}" among ${contacts.length} contacts.`}
@@ -261,6 +317,8 @@ interface RowProps {
   contact: Contact;
   tags: Tag[];
   assigned: string[];
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
   onOpen: (c: Contact) => void;
   onCategory: (id: string, category: ContactCategory) => void;
   onNotes: (id: string, notes: string | null) => void;
@@ -274,6 +332,8 @@ const ContactRow = memo(function ContactRow({
   contact: c,
   tags,
   assigned,
+  selected,
+  onToggleSelect,
   onOpen,
   onCategory,
   onNotes,
@@ -282,7 +342,10 @@ const ContactRow = memo(function ContactRow({
   onCreateTag,
 }: RowProps) {
   return (
-    <tr onClick={() => onOpen(c)}>
+    <tr onClick={() => onOpen(c)} className={selected ? 'row-selected' : undefined}>
+      <td className="pick-cell" onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={selected} onChange={() => onToggleSelect(c.id)} />
+      </td>
       <td>{c.full_name}</td>
       <td onClick={(e) => e.stopPropagation()}>
         <select

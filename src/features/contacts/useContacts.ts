@@ -249,3 +249,39 @@ export function useDeleteFieldDefinition() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['field_definitions'] }),
   });
 }
+
+/**
+ * Apply the same patch to many contacts in one statement. Only the fields the
+ * bulk editor actually filled are in `input`, so untouched columns keep their
+ * per-contact values.
+ */
+export function useBulkUpdateContacts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      ids,
+      input,
+    }: {
+      ids: string[];
+      input: Partial<ContactInput>;
+    }): Promise<Contact[]> => {
+      const touchesLocation =
+        input.current_city !== undefined || input.current_country !== undefined;
+      const row = { ...input, ...(touchesLocation ? resolveGeo(input) : {}) };
+      const { data, error } = await supabase
+        .from('contacts')
+        .update(row)
+        .in('id', ids)
+        .select(CONTACT_COLUMNS);
+      if (error) throw error;
+      return data as Contact[];
+    },
+    onSuccess: (updated) => {
+      const byId = new Map(updated.map((c) => [c.id, c]));
+      qc.setQueryData<Contact[]>(['contacts'], (old) =>
+        sortByName((old ?? []).map((c) => byId.get(c.id) ?? c)),
+      );
+      for (const c of updated) enqueueGoogleSync(c, 'update');
+    },
+  });
+}

@@ -662,3 +662,14 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 }
 .sugg-opt:hover { border-color: var(--accent); }
 .sugg-actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* Multi-select + bulk editing on the contacts table */
+.sort-select { width: auto; }
+.pick-cell { width: 28px; }
+.pick-cell input { width: auto; margin: 0; cursor: pointer; }
+.contacts-table tbody tr.row-selected { background: var(--panel-2); }
+.bulk-bar { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 16px; }
+.bulk-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.bulk-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.bulk-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--text-dim); }
+.bulk-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
