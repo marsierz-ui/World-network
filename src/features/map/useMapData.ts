@@ -17,8 +17,14 @@ export interface MapPoint {
   city: string | null;
   /** Dot colour: category by default, sublabel colour under a grouped filter. */
   color: [number, number, number];
-  /** Ring colour, when the dot carries one of its own (the flag's second colour). */
-  ring: [number, number, number] | null;
+  /**
+   * All of the flag's dominant colours, most of the flag first, when the dot is
+   * coloured by flag and the country has one - null otherwise (category/tag
+   * colouring, or no country). The map paints these as concentric bands filling
+   * the whole dot rather than a single fill, so a two- or three-colour flag
+   * still reads as itself instead of collapsing to "some colour".
+   */
+  flagColors: [number, number, number][] | null;
   /** Which sublabel drove the colour, for the legend. */
   colorLabel: string | null;
 }
@@ -72,17 +78,18 @@ function toPoint(
   const anchor = list.find((c) => c.current_country) ?? list[0];
 
   let color = CATEGORY_RGB[dominantCategory(list)];
-  let ring: [number, number, number] | null = null;
+  let flagColors: [number, number, number][] | null = null;
   let colorLabel: string | null = null;
 
   // Flag colouring wins outright: it is a deliberate choice about what the map
   // is showing, so a tag filter must not quietly repaint it.
   const flag = colorBy === 'flag' ? FLAG_COLORS[anchor.current_country ?? ''] : undefined;
   if (flag?.length) {
-    color = hexToRgb(flag[0]);
-    // The second colour as the ring: one flat fill makes France and the
-    // Netherlands the same dot, and the ring is what separates them.
-    if (flag[1]) ring = hexToRgb(flag[1]);
+    // Every dominant colour, not just the first: one flat fill makes France and
+    // the Netherlands the same dot, and a single ring still throws away a third
+    // colour when the flag has one (Germany, Belgium, Romania, ...).
+    flagColors = flag.map(hexToRgb);
+    color = flagColors[0];
   } else if (sublabels?.size) {
     // Colour by the sublabel most represented at this point.
     const counts = new Map<string, number>();
@@ -107,7 +114,7 @@ function toPoint(
     country: anchor.current_country ?? null,
     city: anchor.current_city ?? null,
     color,
-    ring,
+    flagColors,
     colorLabel,
   };
 }

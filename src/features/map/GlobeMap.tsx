@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-map-gl/maplibre';
 import type { MapPoint } from './useMapData';
+import { flagBandRadius } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap } from '../../lib/basemap';
 import { useTheme } from '../../lib/theme';
@@ -30,24 +31,32 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
   const geojson = useMemo(
     () => ({
       type: 'FeatureCollection' as const,
-      features: points.map((p, i) => ({
-        type: 'Feature' as const,
-        id: i,
-        geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
-        properties: {
-          idx: i,
-          count: p.count,
-          label: p.count > 1 ? String(p.count) : '',
-          color: `rgb(${p.color.join(',')})`,
-          // Flag colouring gives each dot its own ring; without one it falls back
-          // to the theme outline that keeps dots off the basemap.
-          ring: p.ring ? `rgb(${p.ring.join(',')})` : null,
-          ringWidth: p.ring ? 2.5 : 1.5,
-          // See NetworkMap: pastel flags are not recognisable flags.
-          opacity: p.ring ? 0.9 : 0.7,
-          radius: p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2,
-        },
-      })),
+      features: points.map((p, i) => {
+        const radius = p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2;
+        const bands = p.flagColors;
+        return {
+          type: 'Feature' as const,
+          id: i,
+          geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+          properties: {
+            idx: i,
+            count: p.count,
+            label: p.count > 1 ? String(p.count) : '',
+            color: `rgb(${p.color.join(',')})`,
+            // The 2nd and 3rd flag colours, painted as smaller solid discs on top
+            // of the base circle so each one shows as a concentric ring instead
+            // of a thin stroke - see flagBandRadius. Null when the dot has fewer
+            // than that many bands (or isn't flag-coloured at all).
+            band2Color: bands?.[1] ? `rgb(${bands[1].join(',')})` : null,
+            band2Radius: bands?.[1] ? flagBandRadius(radius, 1, bands.length) : 0,
+            band3Color: bands?.[2] ? `rgb(${bands[2].join(',')})` : null,
+            band3Radius: bands?.[2] ? flagBandRadius(radius, 2, bands.length) : 0,
+            // See NetworkMap: pastel flags are not recognisable flags.
+            opacity: bands ? 0.9 : 0.7,
+            radius,
+          },
+        };
+      }),
     }),
     [points],
   );
@@ -114,9 +123,34 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
             'circle-color': ['get', 'color'],
             'circle-opacity': ['get', 'opacity'],
             'circle-radius': ['get', 'radius'],
-            'circle-stroke-width': ['get', 'ringWidth'],
-            'circle-stroke-color': ['coalesce', ['get', 'ring'], outline],
+            // A plain contrast edge, the same for every dot: flag colouring no
+            // longer lives in the stroke, so it never has to compete with it.
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': outline,
             'circle-stroke-opacity': 0.9,
+          }}
+        />
+        {/* Smaller solid discs on top of the base circle, one per extra flag
+            colour, so a two- or three-colour flag fills the whole dot as
+            concentric bands instead of a fill-plus-ring approximation. */}
+        <Layer
+          id="points-band-2"
+          type="circle"
+          filter={['!=', ['get', 'band2Color'], null]}
+          paint={{
+            'circle-color': ['get', 'band2Color'],
+            'circle-opacity': ['get', 'opacity'],
+            'circle-radius': ['get', 'band2Radius'],
+          }}
+        />
+        <Layer
+          id="points-band-3"
+          type="circle"
+          filter={['!=', ['get', 'band3Color'], null]}
+          paint={{
+            'circle-color': ['get', 'band3Color'],
+            'circle-opacity': ['get', 'opacity'],
+            'circle-radius': ['get', 'band3Radius'],
           }}
         />
         <Layer

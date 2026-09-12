@@ -86,8 +86,8 @@ export function MapFilters({ tags, countriesPresent }: { tags: Tag[]; countriesP
         </div>
         {colorBy === 'flag' && (
           <div className="muted small">
-            Fill and ring are the two main colours of the flag. Dots with no country keep their
-            category colour.
+            Dots are painted as concentric bands of the flag's main colours. Dots with no country
+            keep their category colour.
           </div>
         )}
       </div>
