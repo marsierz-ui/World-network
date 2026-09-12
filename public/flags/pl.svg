@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-pl" viewBox="0 0 512 512" width="128" height="128"><defs><clipPath id="flag-clip"><circle cx="256" cy="256" r="256"/></clipPath></defs><g clip-path="url(#flag-clip)">
+  <g fill-rule="evenodd">
+    <path fill="#fff" d="M512 512H0V0h512z"/>
+    <path fill="#dc143c" d="M512 512H0V256h512z"/>
+  </g>
+</g></svg>

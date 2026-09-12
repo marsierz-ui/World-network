@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-ie" viewBox="0 0 512 512" width="128" height="128"><defs><clipPath id="flag-clip"><circle cx="256" cy="256" r="256"/></clipPath></defs><g clip-path="url(#flag-clip)">
+  <g fill-rule="evenodd" stroke-width="1pt">
+    <path fill="#fff" d="M0 0h512v512H0z"/>
+    <path fill="#009A49" d="M0 0h170.7v512H0z"/>
+    <path fill="#FF7900" d="M341.3 0H512v512H341.3z"/>
+  </g>
+</g></svg>
