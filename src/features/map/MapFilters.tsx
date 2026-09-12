@@ -79,15 +79,14 @@ export function MapFilters({ tags, countriesPresent }: { tags: Tag[]; countriesP
           <button
             className={colorBy === 'flag' ? 'seg active' : 'seg'}
             onClick={() => setColorBy('flag')}
-            title="The colours of the flag of the country the dot sits in"
+            title="The flag of the country the dot sits in"
           >
             Flag
           </button>
         </div>
         {colorBy === 'flag' && (
           <div className="muted small">
-            Dots are painted as concentric bands of the flag's main colours. Dots with no country
-            keep their category colour.
+            Dots show the country's actual flag. Dots with no country keep their category colour.
           </div>
         )}
       </div>

@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Map, useControl, type MapRef } from 'react-map-gl/maplibre';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import { ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { MapPoint } from './useMapData';
-import { flagBandRadius } from './mapIcons';
+import { flagImageUrl } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap, useMarkerOutline } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+// Native pixel size baked into public/flags/<code>.svg - see build-flag-svgs.mjs.
+const FLAG_IMAGE_SIZE = 128;
 
 // Flat discs instead of the old 30px teardrop pins: a pin's tail and solid fill
 // cover a lot of basemap, and at city scale several of them overlap into a blob.
@@ -50,11 +53,10 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
 
   const stacks = useMemo(() => points.filter((p) => p.count > 1), [points]);
   const selectedRing = useMemo(() => (selected ? [selected] : []), [selected]);
-  // The 2nd and 3rd flag colours each get their own smaller disc stacked on top
-  // of the base circle (see flagBandRadius) instead of a stroke, so a two- or
-  // three-colour flag fills the whole dot as concentric bands.
-  const flagBand2 = useMemo(() => points.filter((p) => (p.flagColors?.length ?? 0) >= 2), [points]);
-  const flagBand3 = useMemo(() => points.filter((p) => (p.flagColors?.length ?? 0) >= 3), [points]);
+  // The actual flag image sits on top of the base circle once it has loaded;
+  // deck.gl's IconLayer fetches and caches each one by country code itself,
+  // unlike maplibre it needs no manual addImage bookkeeping (see GlobeMap).
+  const flagged = useMemo(() => points.filter((p) => p.flagCode), [points]);
 
   const layers = useMemo(
     () => [
@@ -71,14 +73,9 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         // Translucent so overlapping points and the basemap both stay readable.
         // Flag fills go nearly opaque: at the translucency that keeps category
         // dots from hiding the basemap, a flag's colours wash out into pastels
-        // and stop being recognisable as that flag.
-        getFillColor: (d) =>
-          [...(d.flagColors?.[0] ?? d.color), d.flagColors ? 235 : 170] as [
-            number,
-            number,
-            number,
-            number,
-          ],
+        // and stop being recognisable as that flag. This is only ever the
+        // placeholder shown before the real flag image below has loaded.
+        getFillColor: (d) => [...d.color, d.flagCode ? 235 : 170] as [number, number, number, number],
         // A plain contrast edge, the same whether or not the dot is flag
         // coloured: the flag no longer lives in the stroke, so it never has to
         // compete with it.
@@ -92,33 +89,23 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         onHover: (info) => setHovered((info.object as MapPoint) ?? null),
         updateTriggers: { getLineColor: [theme, points], getFillColor: points },
       }),
-      new ScatterplotLayer<MapPoint>({
-        id: 'contacts-flag-band-2',
-        data: flagBand2,
+      // The actual flag (public/flags/<code>.svg, pre-cropped to a circle) as
+      // the whole dot's background, sized to exactly cover the circle above
+      // so no placeholder colour shows past its transparent corners.
+      new IconLayer<MapPoint>({
+        id: 'contacts-flags',
+        data: flagged,
         pickable: false,
-        stroked: false,
-        filled: true,
-        radiusUnits: 'pixels',
+        sizeUnits: 'pixels',
         getPosition: (d) => [d.lng, d.lat],
-        getRadius: (d) => flagBandRadius(radiusFor(d), 1, d.flagColors!.length),
-        getFillColor: (d) => [...d.flagColors![1], 235] as [number, number, number, number],
-        radiusMinPixels: 4,
-        radiusMaxPixels: 28,
-        updateTriggers: { getRadius: flagBand2, getFillColor: flagBand2 },
-      }),
-      new ScatterplotLayer<MapPoint>({
-        id: 'contacts-flag-band-3',
-        data: flagBand3,
-        pickable: false,
-        stroked: false,
-        filled: true,
-        radiusUnits: 'pixels',
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: (d) => flagBandRadius(radiusFor(d), 2, d.flagColors!.length),
-        getFillColor: (d) => [...d.flagColors![2], 235] as [number, number, number, number],
-        radiusMinPixels: 4,
-        radiusMaxPixels: 28,
-        updateTriggers: { getRadius: flagBand3, getFillColor: flagBand3 },
+        getIcon: (d) => ({
+          url: flagImageUrl(d.flagCode!),
+          id: d.flagCode!,
+          width: FLAG_IMAGE_SIZE,
+          height: FLAG_IMAGE_SIZE,
+        }),
+        getSize: (d) => radiusFor(d) * 2,
+        updateTriggers: { getIcon: flagged, getSize: flagged },
       }),
       // Ring marking the open point, so the card and the map agree.
       new ScatterplotLayer<MapPoint>({
@@ -148,7 +135,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
         getAlignmentBaseline: 'center',
       }),
     ],
-    [points, stacks, selectedRing, flagBand2, flagBand3, onSelect, outline, theme],
+    [points, stacks, selectedRing, flagged, onSelect, outline, theme],
   );
 
   return (

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="flag-icons-ch" viewBox="0 0 512 512" width="128" height="128"><defs><clipPath id="flag-clip"><circle cx="256" cy="256" r="256"/></clipPath></defs><g clip-path="url(#flag-clip)">
+  <g fill-rule="evenodd" stroke-width="1pt">
+    <path fill="red" d="M0 0h512v512H0z"/>
+    <g fill="#fff">
+      <path d="M96 208h320v96H96z"/>
+      <path d="M208 96h96v320h-96z"/>
+    </g>
+  </g>
+</g></svg>
