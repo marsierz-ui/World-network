@@ -17,3 +17,6 @@ create table if not exists public.google_credentials (
 alter table public.google_credentials enable row level security;
 
 revoke all on public.google_credentials from anon, authenticated;
+
+comment on table public.google_credentials is
+  'Google refresh tokens. RLS enabled with no policies and no anon/authenticated grants: only the service role (the google-token Edge Function) can read or write it.';

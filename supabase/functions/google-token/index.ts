@@ -17,23 +17,45 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// This function mints Google access tokens, so it answers the app's own origins
+// and nobody else's. `*` would let any page on the internet call it and read the
+// token out of the response with a JWT that leaked from the browser.
+// Override for another deployment with:
+//   supabase secrets set ALLOWED_ORIGINS=https://example.com,https://www.example.com
+const ALLOWED_ORIGINS = (
+  Deno.env.get('ALLOWED_ORIGINS') ??
+  'https://marsierz-ui.github.io,http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
-const json = (body: unknown, status = 200) =>
+// An origin that is not on the list gets no Allow-Origin header at all, which is
+// what makes the browser refuse the response. Vary: Origin keeps a cache from
+// handing one origin's answer to another.
+function cors(origin: string | null): Record<string, string> {
+  return {
+    ...(origin && ALLOWED_ORIGINS.includes(origin)
+      ? { 'Access-Control-Allow-Origin': origin }
+      : {}),
+    Vary: 'Origin',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
+const json = (body: unknown, status = 200, origin: string | null = null) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+    headers: { ...cors(origin), 'Content-Type': 'application/json' },
   });
 
 // Application-level outcomes are 200 with ok:false, not HTTP errors: the client
 // has to tell "you are not connected" (act on it) from "the function is not
 // deployed / unreachable" (fall back to the session token), and an HTTP error
 // code cannot carry that difference through supabase-js.
-const fail = (reason: string, detail?: string) => json({ ok: false, reason, detail });
+const fail = (reason: string, detail?: string, origin: string | null = null) =>
+  json({ ok: false, reason, detail }, 200, origin);
 
 const admin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -42,12 +64,13 @@ const admin = createClient(
 );
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  const origin = req.headers.get('Origin');
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors(origin) });
 
   const jwt = req.headers.get('Authorization')?.replace(/^Bearer /i, '');
-  if (!jwt) return json({ ok: false, reason: 'unauthorized' }, 401);
+  if (!jwt) return json({ ok: false, reason: 'unauthorized' }, 401, origin);
   const { data: auth, error: authError } = await admin.auth.getUser(jwt);
-  if (authError || !auth.user) return json({ ok: false, reason: 'unauthorized' }, 401);
+  if (authError || !auth.user) return json({ ok: false, reason: 'unauthorized' }, 401, origin);
   const userId = auth.user.id;
 
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
@@ -58,15 +81,15 @@ Deno.serve(async (req) => {
 
   if (action === 'store') {
     const refreshToken = body?.refresh_token;
-    if (typeof refreshToken !== 'string' || !refreshToken) return fail('missing_refresh_token');
+    if (typeof refreshToken !== 'string' || !refreshToken) return fail('missing_refresh_token', undefined, origin);
     const { error } = await admin.from('google_credentials').upsert({
       user_id: userId,
       refresh_token: refreshToken,
       scope: typeof body?.scope === 'string' ? body.scope : null,
       updated_at: new Date().toISOString(),
     });
-    if (error) return fail('store_failed', error.message);
-    return json({ ok: true });
+    if (error) return fail('store_failed', error.message, origin);
+    return json({ ok: true }, 200, origin);
   }
 
   if (action === 'status') {
@@ -75,7 +98,7 @@ Deno.serve(async (req) => {
       .select('updated_at')
       .eq('user_id', userId)
       .maybeSingle();
-    return json({ ok: true, connected: !!data, configured: !!(clientId && clientSecret) });
+    return json({ ok: true, connected: !!data, configured: !!(clientId && clientSecret) }, 200, origin);
   }
 
   if (action === 'disconnect') {
@@ -92,19 +115,19 @@ Deno.serve(async (req) => {
       }).catch(() => {});
     }
     await admin.from('google_credentials').delete().eq('user_id', userId);
-    return json({ ok: true });
+    return json({ ok: true }, 200, origin);
   }
 
-  if (action !== 'access') return fail('unknown_action', String(action));
+  if (action !== 'access') return fail('unknown_action', String(action), origin);
 
-  if (!clientId || !clientSecret) return fail('not_configured');
+  if (!clientId || !clientSecret) return fail('not_configured', undefined, origin);
 
   const { data: cred } = await admin
     .from('google_credentials')
     .select('refresh_token')
     .eq('user_id', userId)
     .maybeSingle();
-  if (!cred?.refresh_token) return fail('no_refresh_token');
+  if (!cred?.refresh_token) return fail('no_refresh_token', undefined, origin);
 
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
@@ -124,15 +147,19 @@ Deno.serve(async (req) => {
     // and asks for a reconnect instead of retrying forever.
     if (payload?.error === 'invalid_grant') {
       await admin.from('google_credentials').delete().eq('user_id', userId);
-      return fail('reconnect_required', payload?.error_description);
+      return fail('reconnect_required', payload?.error_description, origin);
     }
-    return fail('google_error', payload?.error_description ?? payload?.error ?? String(res.status));
+    return fail('google_error', payload?.error_description ?? payload?.error ?? String(res.status), origin);
   }
 
-  return json({
-    ok: true,
-    access_token: payload.access_token,
-    expires_in: payload.expires_in ?? 3600,
-    scope: payload.scope ?? null,
-  });
+  return json(
+    {
+      ok: true,
+      access_token: payload.access_token,
+      expires_in: payload.expires_in ?? 3600,
+      scope: payload.scope ?? null,
+    },
+    200,
+    origin,
+  );
 });
