@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-map-gl/maplibre';
 import type { MapPoint } from './useMapData';
-import { flagBandRadius } from './mapIcons';
+import { flagImageUrl } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
 import { useBasemap } from '../../lib/basemap';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+// Native pixel size baked into public/flags/<code>.svg - see build-flag-svgs.mjs.
+const FLAG_IMAGE_SIZE = 128;
 
 interface Props {
   points: MapPoint[];
@@ -23,17 +26,45 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
   const outline = useTheme((s) => (s.theme === 'light' ? '#ffffff' : '#0a0c10'));
   const setGrouping = useMapStore((s) => s.setGrouping);
   const mapRef = useRef<MapRef | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  // Country codes whose flag image maplibre has actually registered. A plain
+  // circle (MapPoint.color) covers a code until its entry here lands, so a
+  // fresh view never shows a blank dot while the image is still loading.
+  const [loadedFlags, setLoadedFlags] = useState<Set<string>>(new Set());
+  const requestedFlags = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (focus) mapRef.current?.getMap().flyTo({ center: [focus.lng, focus.lat], zoom: focus.zoom });
   }, [focus]);
+
+  // Register each flag actually in use as a maplibre image, once. addImage
+  // needs a loaded style, hence the mapReady gate; adding mapReady as a
+  // dependency (rather than only points) picks up whatever codes are already
+  // present the moment the map finishes loading, not just later changes.
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    for (const p of points) {
+      const code = p.flagCode;
+      if (!code || map.hasImage(code) || requestedFlags.current.has(code)) continue;
+      requestedFlags.current.add(code);
+      const img = new Image();
+      img.onload = () => {
+        if (!map.hasImage(code)) map.addImage(code, img);
+        setLoadedFlags((prev) => (prev.has(code) ? prev : new Set(prev).add(code)));
+      };
+      img.onerror = () => requestedFlags.current.delete(code);
+      img.src = flagImageUrl(code);
+    }
+  }, [points, mapReady]);
 
   const geojson = useMemo(
     () => ({
       type: 'FeatureCollection' as const,
       features: points.map((p, i) => {
         const radius = p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2;
-        const bands = p.flagColors;
+        const iconReady = !!p.flagCode && loadedFlags.has(p.flagCode);
         return {
           type: 'Feature' as const,
           id: i,
@@ -43,22 +74,18 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
             count: p.count,
             label: p.count > 1 ? String(p.count) : '',
             color: `rgb(${p.color.join(',')})`,
-            // The 2nd and 3rd flag colours, painted as smaller solid discs on top
-            // of the base circle so each one shows as a concentric ring instead
-            // of a thin stroke - see flagBandRadius. Null when the dot has fewer
-            // than that many bands (or isn't flag-coloured at all).
-            band2Color: bands?.[1] ? `rgb(${bands[1].join(',')})` : null,
-            band2Radius: bands?.[1] ? flagBandRadius(radius, 1, bands.length) : 0,
-            band3Color: bands?.[2] ? `rgb(${bands[2].join(',')})` : null,
-            band3Radius: bands?.[2] ? flagBandRadius(radius, 2, bands.length) : 0,
+            // Null until the flag image for this dot's country has loaded -
+            // see the icon layer below, which only draws where this is set.
+            icon: iconReady ? p.flagCode : null,
+            iconSize: (radius * 2) / FLAG_IMAGE_SIZE,
             // See NetworkMap: pastel flags are not recognisable flags.
-            opacity: bands ? 0.9 : 0.7,
+            opacity: p.flagCode ? 0.9 : 0.7,
             radius,
           },
         };
       }),
     }),
-    [points],
+    [points, loadedFlags],
   );
 
   const selectedGeojson = useMemo(
@@ -94,6 +121,7 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
       onLoad={(e) => {
         e.target.setProjection({ type: 'globe' });
         setGrouping(groupingForZoom(e.target.getZoom()));
+        setMapReady(true);
       }}
       onMove={(e) => setGrouping(groupingForZoom(e.viewState.zoom))}
       interactiveLayerIds={['points']}
@@ -116,6 +144,9 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
       </Source>
 
       <Source id="contacts" type="geojson" data={geojson}>
+        {/* The dot's colour: category colour, sublabel colour, or (in flag
+            mode) the flag's own dominant colour as a placeholder until the
+            real flag image below has loaded - see MapPoint.color. */}
         <Layer
           id="points"
           type="circle"
@@ -130,27 +161,19 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
             'circle-stroke-opacity': 0.9,
           }}
         />
-        {/* Smaller solid discs on top of the base circle, one per extra flag
-            colour, so a two- or three-colour flag fills the whole dot as
-            concentric bands instead of a fill-plus-ring approximation. */}
+        {/* The actual flag image (public/flags/<code>.svg, pre-cropped to a
+            circle) as the whole dot's background, once it has loaded - sized
+            to exactly cover the circle layer above so no colour shows past
+            its transparent corners. */}
         <Layer
-          id="points-band-2"
-          type="circle"
-          filter={['!=', ['get', 'band2Color'], null]}
-          paint={{
-            'circle-color': ['get', 'band2Color'],
-            'circle-opacity': ['get', 'opacity'],
-            'circle-radius': ['get', 'band2Radius'],
-          }}
-        />
-        <Layer
-          id="points-band-3"
-          type="circle"
-          filter={['!=', ['get', 'band3Color'], null]}
-          paint={{
-            'circle-color': ['get', 'band3Color'],
-            'circle-opacity': ['get', 'opacity'],
-            'circle-radius': ['get', 'band3Radius'],
+          id="points-flag"
+          type="symbol"
+          filter={['!=', ['get', 'icon'], null]}
+          layout={{
+            'icon-image': ['get', 'icon'],
+            'icon-size': ['get', 'iconSize'],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
           }}
         />
         <Layer

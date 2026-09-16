@@ -15,16 +15,20 @@ export interface MapPoint {
   /** null when the point's contacts have no country set. */
   country: string | null;
   city: string | null;
-  /** Dot colour: category by default, sublabel colour under a grouped filter. */
+  /**
+   * Dot colour: category by default, sublabel colour under a grouped filter,
+   * or the flag's own dominant colour in flag mode. In flag mode this is only
+   * ever the instant placeholder shown before flagCode's image has loaded (or
+   * the permanent look for a stack whose image fails to load) - see flagCode.
+   */
   color: [number, number, number];
   /**
-   * All of the flag's dominant colours, most of the flag first, when the dot is
-   * coloured by flag and the country has one - null otherwise (category/tag
-   * colouring, or no country). The map paints these as concentric bands filling
-   * the whole dot rather than a single fill, so a two- or three-colour flag
-   * still reads as itself instead of collapsing to "some colour".
+   * Lower-cased ISO code of the actual flag image to paint as the dot's
+   * background (public/flags/<code>.svg, baked pre-cropped to a circle - see
+   * scripts/build-flag-svgs.mjs), when the dot is coloured by flag and the
+   * country has one. Null otherwise (category/tag colouring, or no country).
    */
-  flagColors: [number, number, number][] | null;
+  flagCode: string | null;
   /** Which sublabel drove the colour, for the legend. */
   colorLabel: string | null;
 }
@@ -78,18 +82,17 @@ function toPoint(
   const anchor = list.find((c) => c.current_country) ?? list[0];
 
   let color = CATEGORY_RGB[dominantCategory(list)];
-  let flagColors: [number, number, number][] | null = null;
+  let flagCode: string | null = null;
   let colorLabel: string | null = null;
 
   // Flag colouring wins outright: it is a deliberate choice about what the map
   // is showing, so a tag filter must not quietly repaint it.
   const flag = colorBy === 'flag' ? FLAG_COLORS[anchor.current_country ?? ''] : undefined;
   if (flag?.length) {
-    // Every dominant colour, not just the first: one flat fill makes France and
-    // the Netherlands the same dot, and a single ring still throws away a third
-    // colour when the flag has one (Germany, Belgium, Romania, ...).
-    flagColors = flag.map(hexToRgb);
-    color = flagColors[0];
+    // The dominant colour as an instant placeholder - the actual flag image
+    // (flagCode) loads a beat later, and a bare dot until then would look broken.
+    color = hexToRgb(flag[0]);
+    flagCode = anchor.current_country!.toLowerCase();
   } else if (sublabels?.size) {
     // Colour by the sublabel most represented at this point.
     const counts = new Map<string, number>();
@@ -114,7 +117,7 @@ function toPoint(
     country: anchor.current_country ?? null,
     city: anchor.current_city ?? null,
     color,
-    flagColors,
+    flagCode,
     colorLabel,
   };
 }
