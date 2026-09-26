@@ -70,7 +70,16 @@ supabase secrets set GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...
 Same client id/secret as the Google provider in Supabase Auth. Apply
 `supabase/migrations/20260901120000_google_credentials.sql` first: it creates the table the function
 keeps refresh tokens in, with RLS on and **no policies at all**, so only the service role the
-function runs as can read them - not the browser, and not a stolen anon key.
+function runs as can read them - not the browser, and not a stolen anon key. (It is already applied
+on the hosted project.)
+
+The function answers a fixed list of origins - the deployed site and the two local dev hosts - so a
+page on another origin cannot call it and read the Google access token out of the response. Deployed
+somewhere else, set the list:
+
+```bash
+supabase secrets set ALLOWED_ORIGINS=https://your-site.example,https://www.your-site.example
+```
 
 One Google-side catch: while the OAuth consent screen is in **Testing**, Google expires refresh
 tokens after 7 days, so the connection drops weekly however this is deployed. Publishing the app
@@ -227,6 +236,42 @@ Two details worth knowing before changing the pipeline:
 projects pause after ~7 days of inactivity and a paused project takes the app down. Note that
 GitHub disables scheduled workflows in a repo with no activity for 60 days.
 
+## Data security
+
+Every table in `public` is owner-scoped: RLS on, policies keyed on `auth.uid() = user_id`, so one
+signed-in user can only ever reach their own rows. Under that, `anon` holds **no table grants at
+all** - nothing in the app runs signed out, so a dropped or mis-edited policy fails closed instead
+of exposing 676 contacts to anyone with the (public by design) anon key. Supabase's default
+privileges, which hand `anon` full rights on every new table in `public`, are switched off for that
+role as well, so an ad-hoc table created in the SQL editor is not world-readable the moment it
+exists.
+
+Three tables have RLS on with **no policies at all** - `google_credentials` (Google refresh
+tokens), `keepalive`, and `contacts_geo_backup` (an old snapshot of contact PII). That is the
+deny-everything setting: only the service role gets in. The Supabase linter reports them as
+"RLS enabled, no policy"; for these three that is the intended end state, not a finding.
+
+**PostGIS lives in the `extensions` schema, not `public`.** PostgREST exposes `public`, so an
+extension installed there puts its own objects on the API: `public.spatial_ref_sys` shipped with RLS
+off and write grants to `anon`, and `st_estimatedextent` was an anonymous `SECURITY DEFINER` RPC.
+Neither could be fixed in place - they are owned by `supabase_admin`, and a REVOKE from anyone but
+the grantor silently does nothing - so `20260916202549_move_postgis_out_of_public.sql` drops and
+recreates the extension in `extensions`, recreating the two generated `geography` columns (which
+derive from the lng/lat columns and recompute to identical values). Keep PostGIS out of `public` if
+you ever rebuild the project.
+
+`public.ping()` is deliberately `SECURITY DEFINER` and anon-executable: the keepalive workflow is
+the only caller and it has nothing but the anon key. It writes at most once a minute and returns a
+timestamp, so an unmetered caller gains nothing.
+
+Two things are **not** settled in code, and need a decision in the Supabase dashboard:
+
+- **Leaked-password protection is off** (Authentication -> Providers -> Email). Turning it on
+  checks new passwords against HaveIBeenPwned. It is one toggle and there is no reason not to.
+- **`contacts_geo_backup` still holds 630 rows of contact PII** from an old geocoding pass. It is
+  unreachable from the API and referenced by nothing. If it has served its purpose, drop it: a
+  second copy of the address book is a second thing to lose.
+
 ## Known limits (by design)
 
 - **LinkedIn** has no API for connections/location — only the CSV export, which carries company and
@@ -237,7 +282,7 @@ GitHub disables scheduled workflows in a repo with no activity for 60 days.
 
 ```
 .github/workflows/                  Pages deploy + Supabase keepalive
-supabase/migrations/                schema + PostGIS + RLS, applied in order
+supabase/migrations/                schema + PostGIS + RLS + grants, applied in order
 supabase/functions/google-token/    refresh-token exchange, keeps Google connected
 src/lib/                            supabase client, geocode, countries, cities, types
 src/features/auth/                  AuthProvider, LoginPage
