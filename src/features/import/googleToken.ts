@@ -45,9 +45,20 @@ interface FunctionResult {
 const DOWN_FOR_MS = 5 * 60_000;
 let downUntil = 0;
 
-/** Returns null when the function is unreachable (not deployed, offline). */
-async function callFunction(body: Record<string, unknown>): Promise<FunctionResult | null> {
-  if (Date.now() < downUntil) return null;
+/**
+ * Returns null when the function is unreachable (not deployed, offline).
+ *
+ * `force` skips the "down" window above. Only the store call uses it: that one
+ * is a single irreplaceable opportunity (see rememberGoogleRefreshToken), and
+ * skipping it to save a request that would probably fail is the wrong trade -
+ * a breaker tripped seconds earlier by an unrelated status check would cost
+ * the connection for good.
+ */
+async function callFunction(
+  body: Record<string, unknown>,
+  { force = false }: { force?: boolean } = {},
+): Promise<FunctionResult | null> {
+  if (!force && Date.now() < downUntil) return null;
   const { data, error } = await supabase.functions.invoke<FunctionResult>(FN, { body });
   if (error || !data) {
     downUntil = Date.now() + DOWN_FOR_MS;
@@ -87,10 +98,32 @@ export function getGoogleToken(): string | null {
  * sign-in asks for `access_type=offline` and `prompt=consent` every time - a
  * silent re-auth would return an access token and no refresh token, and the
  * connection would quietly go back to lasting one hour.
+ *
+ * Retried, unlike every other call here, because this one cannot be repeated
+ * later: Supabase surfaces provider_refresh_token on the redirect page load and
+ * never again, so a store lost to a hiccup (a cold function, a flaky network on
+ * the redirect) silently downgrades the connection to session-only until the
+ * user happens to sign in again. Retries stay in memory - the point of the Edge
+ * Function is that the refresh token never lands in browser storage.
  */
+const STORE_ATTEMPTS = 4;
+const STORE_BACKOFF_MS = 1_500;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function rememberGoogleRefreshToken(refreshToken: string): Promise<boolean> {
-  const res = await callFunction({ action: 'store', refresh_token: refreshToken });
-  return !!res?.ok;
+  for (let attempt = 0; attempt < STORE_ATTEMPTS; attempt++) {
+    const res = await callFunction(
+      { action: 'store', refresh_token: refreshToken },
+      { force: true },
+    );
+    if (res?.ok) return true;
+    // A function that answered and refused (bad payload, a database error) will
+    // refuse the retry the same way; only an unreachable one is worth waiting for.
+    if (res) return false;
+    if (attempt < STORE_ATTEMPTS - 1) await delay(STORE_BACKOFF_MS * 2 ** attempt);
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------

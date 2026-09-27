@@ -6,3 +6,6 @@
 -- pull/import the same user's contacts twice at once.
 alter table public.google_credentials
   add column if not exists sync_started_at timestamptz;
+
+comment on table public.google_credentials is
+  'Google refresh tokens. RLS enabled with no policies and no anon/authenticated grants: only the service role (the google-token and google-sync-cron Edge Functions) can read or write it.';

@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Contact, ContactCategory, Tag } from '../lib/database.types';
 import { COUNTRY_BY_CODE } from '../lib/countries';
@@ -99,7 +100,17 @@ export function ContactsPage() {
     [createTagMutate],
   );
 
+  // Set while a drag that actually crossed into a second row is in flight, so
+  // the checkbox's own click (which still fires if the drag happens to end
+  // back on the row it started from) does not toggle that row a second time
+  // on top of what the drag already painted.
+  const justDraggedRef = useRef(false);
+
   const onToggleSelect = useCallback((id: string) => {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -178,6 +189,58 @@ export function ContactsPage() {
     () => visibleIds.filter((id) => selected.has(id)),
     [visibleIds, selected],
   );
+
+  // Mark a whole run of rows selected (or not) by dragging over the pick
+  // column instead of clicking each checkbox - mousedown starts the drag,
+  // mouseenter on the way through extends it. anchor/value are only read from
+  // this ref while a drag is live, so they don't need to be React state.
+  const dragRef = useRef<{ anchor: number; value: boolean } | null>(null);
+  // Mirrors `selected` for onRowDragStart to read without depending on it:
+  // that callback is a prop on every memoised row, so keeping it stable across
+  // selection changes is what keeps an unrelated row from re-rendering when
+  // one row's checkbox changes. Only ever read from the mousedown handler
+  // below, never during render, so syncing it a tick late is fine.
+  const selectedRef = useRef(selected);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  const paintRange = useCallback(
+    (from: number, to: number, value: boolean) => {
+      const [lo, hi] = from <= to ? [from, to] : [to, from];
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (let i = lo; i <= hi; i++) {
+          const id = filtered[i]?.id;
+          if (!id) continue;
+          if (value) next.add(id);
+          else next.delete(id);
+        }
+        return next;
+      });
+    },
+    [filtered],
+  );
+
+  const onRowDragStart = useCallback((index: number, id: string) => {
+    dragRef.current = { anchor: index, value: !selectedRef.current.has(id) };
+  }, []);
+
+  const onRowDragEnter = useCallback(
+    (index: number, e: ReactMouseEvent) => {
+      const drag = dragRef.current;
+      // buttons is a bitmask; 1 is the primary button. Bails out if it was
+      // released outside the table, where no mouseup here caught it.
+      if (!drag || !(e.buttons & 1)) return;
+      justDraggedRef.current = true;
+      paintRange(drag.anchor, index, drag.value);
+    },
+    [paintRange],
+  );
+
+  useEffect(() => {
+    const onUp = () => { dragRef.current = null; };
+    window.addEventListener('mouseup', onUp);
+    return () => window.removeEventListener('mouseup', onUp);
+  }, []);
 
   function handleSubmit(input: ContactInput) {
     if (editing) {
@@ -260,14 +323,17 @@ export function ContactsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
+              {filtered.map((c, index) => (
                 <ContactRow
                   key={c.id}
+                  index={index}
                   contact={c}
                   tags={tags}
                   assigned={tagMap[c.id] ?? NO_TAGS}
                   selected={selected.has(c.id)}
                   onToggleSelect={onToggleSelect}
+                  onDragStart={onRowDragStart}
+                  onDragEnter={onRowDragEnter}
                   onOpen={onOpen}
                   onCategory={onCategory}
                   onNotes={onNotes}
@@ -314,11 +380,14 @@ export function ContactsPage() {
 }
 
 interface RowProps {
+  index: number;
   contact: Contact;
   tags: Tag[];
   assigned: string[];
   selected: boolean;
   onToggleSelect: (id: string) => void;
+  onDragStart: (index: number, id: string) => void;
+  onDragEnter: (index: number, e: ReactMouseEvent) => void;
   onOpen: (c: Contact) => void;
   onCategory: (id: string, category: ContactCategory) => void;
   onNotes: (id: string, notes: string | null) => void;
@@ -329,11 +398,14 @@ interface RowProps {
 
 // Memoised so editing one contact repaints one row instead of the whole table.
 const ContactRow = memo(function ContactRow({
+  index,
   contact: c,
   tags,
   assigned,
   selected,
   onToggleSelect,
+  onDragStart,
+  onDragEnter,
   onOpen,
   onCategory,
   onNotes,
@@ -343,7 +415,13 @@ const ContactRow = memo(function ContactRow({
 }: RowProps) {
   return (
     <tr onClick={() => onOpen(c)} className={selected ? 'row-selected' : undefined}>
-      <td className="pick-cell" onClick={(e) => e.stopPropagation()}>
+      <td
+        className="pick-cell"
+        title="Click, or press and drag over several rows, to select them"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={() => onDragStart(index, c.id)}
+        onMouseEnter={(e) => onDragEnter(index, e)}
+      >
         <input type="checkbox" checked={selected} onChange={() => onToggleSelect(c.id)} />
       </td>
       <td>{c.full_name}</td>

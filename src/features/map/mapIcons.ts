@@ -11,3 +11,8 @@ export const CATEGORY_HEX: Record<ContactCategory, string> = {
   private: '#22c55e',
   other: '#64748b',
 };
+
+/** public/flags/<code>.svg - a flag pre-cropped to a circle. See MapPoint.flagCode. */
+export function flagImageUrl(code: string): string {
+  return `${import.meta.env.BASE_URL}flags/${code}.svg`;
+}
