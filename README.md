@@ -149,6 +149,7 @@ Feedback button -> public.feedback + Storage bucket `feedback` (private)   statu
 Admin page      -> triage, note for the agent, "Send to AI agent"
   -> Edge Function feedback-dispatch (admin-only)                         status: dispatched
      -> GitHub repository_dispatch -> .github/workflows/feedback-agent.yml
+        (shipped as docs/feedback-agent.yml; move it there to enable it)
         -> stages the note + screenshot in .feedback/ (gitignored)
         -> Claude Code looks at the screenshot, implements, opens a PR
 You review and merge -> deploy.yml ships it

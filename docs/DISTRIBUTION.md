@@ -97,7 +97,11 @@ Same pipeline as attention-tracker, described in the README under *Feedback*. Se
 2. Make yourself admin in the SQL editor:
    `insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';`
    An **Admin** item appears in the menu.
-3. Repo secret `CLAUDE_CODE_OAUTH_TOKEN` (run `claude setup-token`; bills your Claude plan).
+3. Move `docs/feedback-agent.yml` to `.github/workflows/feedback-agent.yml` (on GitHub: open the
+   file, pencil icon, change the path; or `git mv` locally). It could not be committed there
+   directly because the token that pushed this change has no permission to write workflows.
+   Then add the repo secret `CLAUDE_CODE_OAUTH_TOKEN` (run `claude setup-token`; bills your
+   Claude plan).
 4. A fine-grained GitHub token with *Contents: read and write* on this repo, then:
    ```bash
    supabase secrets set GH_REPO=marsierz-ui/World-network GH_DISPATCH_TOKEN=<token>
