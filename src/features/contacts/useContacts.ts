@@ -53,8 +53,12 @@ function resolveGeo(input: Partial<ContactInput>) {
 
 // The list query is ordered by full_name; cache patches keep that order so a
 // rename does not make the row jump on the next refetch instead of now.
+// A shared Collator orders the same as localeCompare but far faster over
+// thousands of rows, which every save re-sorts.
+const byName = new Intl.Collator().compare;
+
 function sortByName(list: Contact[]): Contact[] {
-  return [...list].sort((a, b) => a.full_name.localeCompare(b.full_name));
+  return [...list].sort((a, b) => byName(a.full_name, b.full_name));
 }
 
 // primary_email and phone are the app's denormalised view of the first list

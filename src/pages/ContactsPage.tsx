@@ -188,7 +188,7 @@ export function ContactsPage() {
   }
 
   return (
-    <div className="contacts-layout">
+    <div className={adding || editing ? 'contacts-layout with-panel' : 'contacts-layout'}>
       <div className="contacts-main">
         <div className="toolbar">
           <input

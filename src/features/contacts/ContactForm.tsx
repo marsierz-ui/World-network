@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import type {
   Contact,
   ContactAddress,
@@ -41,6 +41,15 @@ const RELATION_LABELS = [
 const EVENT_LABELS = ['anniversary', 'other'];
 
 const DATE_HINT = 'YYYY-MM-DD (or --MM-DD)';
+
+const COUNTRY_OPTIONS = COUNTRIES.map((c) => ({ value: c.code, label: c.name }));
+
+// Stable empties, so an absent list does not defeat the memo on its block.
+const NO_ROWS: never[] = [];
+const NO_OPTIONS: string[] = [];
+
+type SetField = <K extends keyof ContactDetails>(key: K, value: ContactDetails[K]) => void;
+type LabeledKey = 'emails' | 'phones' | 'urls' | 'chats' | 'relations' | 'events' | 'user_defined';
 
 /**
  * Contacts that predate the `details` column, or came from CSV, hold their only
@@ -101,27 +110,32 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
   );
   const [showPicker, setShowPicker] = useState(false);
 
-  function setField<K extends keyof ContactDetails>(key: K, value: ContactDetails[K]) {
+  // Stable so the memoised blocks below re-render only when their own rows change.
+  const setField: SetField = useCallback((key, value) => {
     setDetails((d) => ({ ...d, [key]: value }));
-  }
+  }, []);
 
   function setCustomField(key: string, value: unknown) {
     setCustom((c) => ({ ...c, [key]: value }));
   }
 
   // Changing city/country invalidates a manual pin so geocoding re-runs.
-  function changeCity(v: string) { setCity(v); setPin(null); }
-  function changeCountry(v: string) { setCountry(v); setPin(null); }
+  const changeCity = useCallback((v: string) => { setCity(v); setPin(null); }, []);
+  const changeCountry = useCallback((v: string) => { setCountry(v); setPin(null); }, []);
 
   // Picking a suggestion settles all three at once, so the saved coordinates
   // cannot drift to a same-named city in another country.
-  function pickCity(c: City) {
+  const pickCity = useCallback((c: City) => {
     setCity(c.name);
     setCountry(c.country);
     setPin({ lng: c.lng, lat: c.lat });
-  }
+  }, []);
 
-  const autoGeo = pin ? null : geocode(city || null, country || null);
+  // Only city, country and pin feed this; typing in any other field must not re-run it.
+  const autoGeo = useMemo(
+    () => (pin ? null : geocode(city || null, country || null)),
+    [pin, city, country],
+  );
   const locationLabel = pin
     ? `Pinned ${pin.lat.toFixed(2)}, ${pin.lng.toFixed(2)}`
     : autoGeo
@@ -214,16 +228,18 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
 
       <LabeledRows
         title="Email"
-        rows={details.emails ?? []}
-        onChange={(r) => setField('emails', r)}
+        field="emails"
+        rows={details.emails ?? NO_ROWS}
+        setField={setField}
         options={EMAIL_LABELS}
         placeholder="name@example.com"
         note="The first entry is the one shown in lists and used to match duplicates."
       />
       <LabeledRows
         title="Phone"
-        rows={details.phones ?? []}
-        onChange={(r) => setField('phones', r)}
+        field="phones"
+        rows={details.phones ?? NO_ROWS}
+        setField={setField}
         options={PHONE_LABELS}
         placeholder="+41 79 000 00 00"
       />
@@ -267,10 +283,7 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
         </label>
       </div>
 
-      <OrganizationRows
-        rows={details.organizations ?? []}
-        onChange={(r) => setField('organizations', r)}
-      />
+      <OrganizationRows rows={details.organizations ?? NO_ROWS} setField={setField} />
 
       <label>
         Birthday <span className="muted">{DATE_HINT}</span>
@@ -281,41 +294,46 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
         />
       </label>
 
-      <AddressRows rows={details.addresses ?? []} onChange={(r) => setField('addresses', r)} />
+      <AddressRows rows={details.addresses ?? NO_ROWS} setField={setField} />
 
       <LabeledRows
         title="Website"
-        rows={details.urls ?? []}
-        onChange={(r) => setField('urls', r)}
+        field="urls"
+        rows={details.urls ?? NO_ROWS}
+        setField={setField}
         options={URL_LABELS}
         placeholder="https://..."
       />
       <LabeledRows
         title="Chat"
-        rows={details.chats ?? []}
-        onChange={(r) => setField('chats', r)}
+        field="chats"
+        rows={details.chats ?? NO_ROWS}
+        setField={setField}
         options={CHAT_LABELS}
         placeholder="username"
       />
       <LabeledRows
         title="Related people"
-        rows={details.relations ?? []}
-        onChange={(r) => setField('relations', r)}
+        field="relations"
+        rows={details.relations ?? NO_ROWS}
+        setField={setField}
         options={RELATION_LABELS}
         placeholder="Name"
       />
       <LabeledRows
         title="Significant dates"
-        rows={details.events ?? []}
-        onChange={(r) => setField('events', r)}
+        field="events"
+        rows={details.events ?? NO_ROWS}
+        setField={setField}
         options={EVENT_LABELS}
         placeholder={DATE_HINT}
       />
       <LabeledRows
         title="Custom fields"
-        rows={details.user_defined ?? []}
-        onChange={(r) => setField('user_defined', r)}
-        options={[]}
+        field="user_defined"
+        rows={details.user_defined ?? NO_ROWS}
+        setField={setField}
+        options={NO_OPTIONS}
         placeholder="Value"
         note="Synced to Google as custom fields."
       />
@@ -380,21 +398,24 @@ export function ContactForm({ initial, fields, onSubmit, onCancel, busy }: Props
 
 // Google allows any string as a label, so the suggestions go in a datalist
 // rather than a select - pick one or type your own, same as Google's editor.
-function LabeledRows({
+const LabeledRows = memo(function LabeledRows({
   title,
+  field,
   rows,
-  onChange,
+  setField,
   options,
   placeholder,
   note,
 }: {
   title: string;
+  field: LabeledKey;
   rows: LabeledValue[];
-  onChange: (rows: LabeledValue[]) => void;
+  setField: SetField;
   options: string[];
   placeholder: string;
   note?: string;
 }) {
+  const onChange = (next: LabeledValue[]) => setField(field, next);
   const listId = `dl-${title.replace(/\s+/g, '-').toLowerCase()}`;
 
   function set(i: number, patch: Partial<LabeledValue>) {
@@ -443,15 +464,17 @@ function LabeledRows({
       </button>
     </div>
   );
-}
+});
 
-function OrganizationRows({
+const OrganizationRows = memo(function OrganizationRows({
   rows,
-  onChange,
+  setField,
 }: {
   rows: ContactOrganization[];
-  onChange: (rows: ContactOrganization[]) => void;
+  setField: SetField;
 }) {
+  const onChange = (next: ContactOrganization[]) => setField('organizations', next);
+
   function set(i: number, patch: Partial<ContactOrganization>) {
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
@@ -483,15 +506,17 @@ function OrganizationRows({
       </button>
     </div>
   );
-}
+});
 
-function AddressRows({
+const AddressRows = memo(function AddressRows({
   rows,
-  onChange,
+  setField,
 }: {
   rows: ContactAddress[];
-  onChange: (rows: ContactAddress[]) => void;
+  setField: SetField;
 }) {
+  const onChange = (next: ContactAddress[]) => setField('addresses', next);
+
   function set(i: number, patch: Partial<ContactAddress>) {
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   }
@@ -543,19 +568,25 @@ function AddressRows({
       </button>
     </div>
   );
-}
+});
 
-function CountrySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+const CountrySelect = memo(function CountrySelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <ComboSelect
-      options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))}
+      options={COUNTRY_OPTIONS}
       value={value}
       onChange={onChange}
       emptyLabel="--"
       placeholder="Search countries..."
     />
   );
-}
+});
 
 function CustomField({
   def,

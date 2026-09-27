@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { searchCities } from '../../lib/geocode';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import type { City } from '../../lib/cities';
@@ -20,12 +20,14 @@ function readableAdmin1(admin1?: string) {
 // Type a city, pick from suggestions. Choosing one adopts its country and
 // coordinates too, so ambiguous names (Vancouver CA vs US) are resolved once,
 // here, instead of being guessed later by the geocoder.
-export function CityAutocomplete({ city, onCityChange, onPick }: Props) {
+export const CityAutocomplete = memo(function CityAutocomplete({ city, onCityChange, onPick }: Props) {
   const [open, setOpen] = useState(false);
   const [touched, setTouched] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  const matches = useMemo(() => (touched ? searchCities(city, 8) : []), [city, touched]);
+  // Deferred so the input repaints first and the search catches up between keystrokes.
+  const query = useDeferredValue(city);
+  const matches = useMemo(() => (touched ? searchCities(query, 8) : []), [query, touched]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,4 +90,4 @@ export function CityAutocomplete({ city, onCityChange, onPick }: Props) {
       )}
     </div>
   );
-}
+});
