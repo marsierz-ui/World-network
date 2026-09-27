@@ -194,3 +194,31 @@ export async function disconnectGoogle(): Promise<void> {
   await callFunction({ action: 'disconnect' });
   clearGoogleToken();
 }
+
+// ---------------------------------------------------------------------------
+// granted scopes
+// ---------------------------------------------------------------------------
+
+export const CONTACTS_SCOPE = 'https://www.googleapis.com/auth/contacts';
+
+/**
+ * Whether Google actually granted the contacts scope to this access token.
+ *
+ * Asking for a scope is not getting it: Google's consent screen shows each
+ * sensitive scope as its own checkbox, and a user who signs in without ticking
+ * "contacts" still lands here signed in, with sync failing on the first call.
+ * Returns null when it cannot tell (offline, tokeninfo down), which callers
+ * treat as "assume fine" rather than nagging on a guess.
+ */
+export async function tokenHasContactsScope(token: string): Promise<boolean | null> {
+  try {
+    const res = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`,
+    );
+    if (!res.ok) return null;
+    const info = (await res.json()) as { scope?: string };
+    return (info.scope ?? '').split(' ').includes(CONTACTS_SCOPE);
+  } catch {
+    return null;
+  }
+}

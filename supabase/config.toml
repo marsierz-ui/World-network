@@ -40,5 +40,9 @@ redirect_uri = "http://localhost:54321/auth/v1/callback"
 # verify_jwt stays on: the function reads and writes the caller's own row.
 verify_jwt = true
 
+[functions.feedback-dispatch]
+# Sends triaged feedback to the AI agent workflow. Admin-only, checked inside.
+verify_jwt = true
+
 [storage]
 enabled = true

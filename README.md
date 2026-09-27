@@ -7,6 +7,9 @@ import from Google and CSV (incl. LinkedIn exports), tag communities, and switch
 **Live: https://marsierz-ui.github.io/World-network/** - always on, installable on a phone
 (Share -> Add to Home Screen on iOS, Install app on Android).
 
+Going public (app stores, Google verification, feedback setup): see
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
+
 This is Phase 1 (map + contacts foundation). Mobility-over-time, stats/gamification, and the
 social mode are planned for later phases.
 
@@ -134,6 +137,35 @@ updated, never created there - one import would otherwise push hundreds of rows 
 book. The very first sync pushes nothing, because with no previous timestamp every contact looks
 changed. The Google card on the Import page stays a one-way pull.
 
+### Feedback -> admin -> AI agent
+
+The **Feedback** button in the menu works like attention-tracker's: drag over the part of the
+screen the feedback is about (tap for the whole screen), write a note, send. The note and the
+cropped screenshot land in the admin inbox (**Admin**, visible to `public.admins` only). From there
+an admin triages and clicks **Send to AI agent**:
+
+```
+Feedback button -> public.feedback + Storage bucket `feedback` (private)   status: new
+Admin page      -> triage, note for the agent, "Send to AI agent"
+  -> Edge Function feedback-dispatch (admin-only)                         status: dispatched
+     -> GitHub repository_dispatch -> .github/workflows/feedback-agent.yml
+        -> stages the note + screenshot in .feedback/ (gitignored)
+        -> Claude Code looks at the screenshot, implements, opens a PR
+You review and merge -> deploy.yml ships it
+```
+
+- The screenshot reaches the agent as a signed Storage link that expires in an hour; the workflow
+  downloads it only if it points at this project's `feedback` bucket.
+- Everything from the payload reaches the workflow through `env`, never pasted into script text,
+  and model/effort are closed sets - the text was typed by a member of the public.
+- This repo is public, so the agent is told not to commit `.feedback/` or quote personal details in
+  commits or the PR.
+- The capture uses `modern-screenshot` (the browser renders the CSS; html2canvas throws on
+  `color-mix()`), and every map is created with `preserveDrawingBuffer` (`MAP_CANVAS_CONTEXT` in
+  `lib/basemap.ts`) so the WebGL canvas is not blank in the screenshot.
+
+Setup (migration, admin, secrets) is in [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md#feedback---admin---ai-agent).
+
 ### Country outlines (choropleth view)
 
 `public/countries.min.json` (160KB, committed) holds Natural Earth 1:110m country outlines keyed by
@@ -216,6 +248,10 @@ npx tsc -b --noEmit  # typecheck
 - "Unplaced" filter on the contacts page to quickly find and fix contacts without coordinates
 - History: durable log of every contact added or removed, grouped by day, filterable by
   action and searchable by name / email / place
+- Signing up with Google connects Google Contacts in the same step: sync starts on and the first
+  load imports them; a banner re-asks if the contacts box was unticked on Google's screen
+- In-app feedback with an area screenshot, an admin inbox, and hand-off to an AI agent that opens
+  a pull request
 
 ## Deployment
 
@@ -246,10 +282,16 @@ privileges, which hand `anon` full rights on every new table in `public`, are sw
 role as well, so an ad-hoc table created in the SQL editor is not world-readable the moment it
 exists.
 
-Three tables have RLS on with **no policies at all** - `google_credentials` (Google refresh
-tokens), `keepalive`, and `contacts_geo_backup` (an old snapshot of contact PII). That is the
+`feedback` is the one table a user can write that someone else reads: senders insert and read
+their own rows, admins read all of them, and column grants limit the sender to what they are telling
+us and the admin to the triage columns, so not even an admin session can rewrite what a user said.
+Admin rights live in `public.admins` rather than a flag on `profiles`, because the "own profile"
+policy lets a user update every column of their own row.
+
+Four tables have RLS on with **no policies at all** - `google_credentials` (Google refresh
+tokens), `admins`, `keepalive`, and `contacts_geo_backup` (an old snapshot of contact PII). That is the
 deny-everything setting: only the service role gets in. The Supabase linter reports them as
-"RLS enabled, no policy"; for these three that is the intended end state, not a finding.
+"RLS enabled, no policy"; for these four that is the intended end state, not a finding.
 
 **PostGIS lives in the `extensions` schema, not `public`.** PostgREST exposes `public`, so an
 extension installed there puts its own objects on the API: `public.spatial_ref_sys` shipped with RLS
@@ -281,9 +323,10 @@ Two things are **not** settled in code, and need a decision in the Supabase dash
 ## Project layout
 
 ```
-.github/workflows/                  Pages deploy + Supabase keepalive
+.github/workflows/                  Pages deploy, Supabase keepalive, feedback AI agent
 supabase/migrations/                schema + PostGIS + RLS + grants, applied in order
 supabase/functions/google-token/    refresh-token exchange, keeps Google connected
+supabase/functions/feedback-dispatch/  admin-only hand-off of feedback to the AI agent workflow
 src/lib/                            supabase client, geocode, countries, cities, types
 src/features/auth/                  AuthProvider, LoginPage
 src/features/profile/               profile query/mutation
@@ -292,7 +335,8 @@ src/features/tags/                  tag hooks, TagAssigner
 src/features/map/                   NetworkMap (deck.gl), GlobeMap, ChoroplethMap, filters, store
 src/features/contacts/useContactHistory.ts  reads contact_events
 src/features/import/                CSV parse, Google People API, bulk import
-src/pages/                          Map, Contacts, Import, Settings
+src/features/feedback/              Feedback button, area screenshot, admin hooks
+src/pages/                          Map, Contacts, Import, Settings, Admin
 scripts/build-cities.mjs            generate full geocoding dataset
 scripts/build-countries.mjs         generate country outlines for the choropleth
 scripts/build-flag-colors.mjs       generate flag colours for the flag dot option

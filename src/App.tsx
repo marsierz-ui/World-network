@@ -10,6 +10,7 @@ import { ContactsPage } from './pages/ContactsPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AdminPage } from './pages/AdminPage';
 
 export function App() {
   const { session, loading } = useAuth();
@@ -28,6 +29,7 @@ export function App() {
         <Route path="history" element={<HistoryPage />} />
         <Route path="import" element={<ImportPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

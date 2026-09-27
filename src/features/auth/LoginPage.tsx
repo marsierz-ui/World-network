@@ -27,6 +27,10 @@ export function LoginPage() {
       <button className="btn-google" onClick={signInWithGoogle}>
         Continue with Google
       </button>
+      <p className="muted login-note">
+        Signing in with Google brings your Google Contacts onto the map and keeps both in sync.
+        Leave the contacts box ticked on Google&apos;s screen.
+      </p>
 
       <div className="divider">or</div>
 
