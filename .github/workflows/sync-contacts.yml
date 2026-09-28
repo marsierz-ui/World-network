@@ -1,0 +1,27 @@
+name: Background Google contacts sync
+
+# Keeps contacts up to date even when nobody has the app open - see
+# supabase/functions/google-sync-cron. Every 15 minutes, matching the
+# in-app background sync's own interval (useGoogleAutoSync.ts); the
+# function itself skips any user synced more recently than that, so a
+# missed or overlapping run just does nothing rather than double-syncing.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call google-sync-cron
+        env:
+          URL: ${{ secrets.VITE_SUPABASE_URL }}
+          CRON_SECRET: ${{ secrets.SYNC_CRON_SECRET }}
+        run: |
+          code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' -X POST \
+            "$URL/functions/v1/google-sync-cron" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H 'Content-Type: application/json')
+          echo "HTTP $code"; cat /tmp/out.txt
+          test "$code" = "200"

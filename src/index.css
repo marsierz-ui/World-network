@@ -141,10 +141,12 @@ input, select {
 .switch input:checked + .slider::before { transform: translateX(18px); background: var(--on-accent); }
 
 /* ---- contacts ---- */
-.contacts-layout { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
-.contacts-layout:has(.side-panel) .contacts-main { border-right: 1px solid var(--border); }
+/* A class, not :has(.side-panel): :has on the layout root makes every DOM change
+   in the editor re-check styles across the whole contacts table. */
+.contacts-layout { display: grid; grid-template-columns: 1fr; height: 100%; }
+.contacts-layout.with-panel { grid-template-columns: 1fr 380px; }
+.contacts-layout.with-panel .contacts-main { border-right: 1px solid var(--border); }
 .contacts-main { padding: 20px; overflow: auto; }
-.contacts-layout:not(:has(.side-panel)) { grid-template-columns: 1fr; }
 .toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
 .toolbar input { flex: 1; }
 .toggle { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
@@ -401,7 +403,7 @@ button.danger { background: var(--danger); border-color: var(--danger); }
   .toolbar .search-input { flex: 1 0 100%; }
 
   /* contacts: full-screen editor sheet, horizontally scrollable table */
-  .contacts-layout { grid-template-columns: 1fr; }
+  .contacts-layout.with-panel { grid-template-columns: 1fr; }
   .side-panel { position: fixed; inset: 0; z-index: 40; }
   .contacts-main { overflow-x: auto; }
   .contacts-table { min-width: 620px; }

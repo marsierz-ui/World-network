@@ -97,6 +97,39 @@ With the function deployed, sync runs on load and every 15 minutes the app is op
 whether to bring them back: nobody is there to answer, and resurrecting a deliberately deleted
 contact is the one outcome worth avoiding. The next manual sync raises the prompt.
 
+#### Updating without the app open (Edge Function + GitHub Action)
+
+The sync above only runs while a tab has the app open. `google-sync-cron` is the same pull, run
+server-side on a schedule instead, so Google-side changes (a contact added or edited from your
+phone's Google Contacts app, say) show up here without opening the app at all:
+
+```bash
+supabase functions deploy google-sync-cron --no-verify-jwt
+supabase secrets set CRON_SECRET=$(openssl rand -hex 32)
+```
+
+`--no-verify-jwt` because this is invoked on a timer with a shared secret, not a signed-in user - the
+function checks the `x-cron-secret` header against `CRON_SECRET` itself. Apply
+`supabase/migrations/20260927120000_google_sync_lock.sql` first (adds the column the function uses
+to avoid two overlapping runs for the same user). Then, as a repository secret alongside the
+existing `VITE_SUPABASE_URL`:
+
+```bash
+gh secret set SYNC_CRON_SECRET   # same value as CRON_SECRET above
+```
+
+`.github/workflows/sync-contacts.yml` then calls it every 15 minutes - it is a plain HTTP POST with
+that header, the same shape as `keepalive.yml`'s ping. Without the two secrets set, the workflow
+fails loudly (the function answers 401/500) rather than silently doing nothing.
+
+This is deliberately **pull only** - it imports Google's contacts here, the same way opening the
+Import page or a background tab-sync does, but never pushes local edits to Google unattended.
+Local edits already push to Google the moment they are saved (`googleQueue.ts`), live, in the
+browser, with the user there to notice if something goes wrong; writing to a real Google address
+book on an unwatched timer for every connected account is a bigger risk than reading from it, so
+that direction stays interactive (`useGoogleSync`'s "Sync now", or the per-tab background sync
+above).
+
 #### Two-way sync
 
 Import stores each Google contact's `resourceName` in `contacts.external_ids.google`. While the
@@ -243,8 +276,9 @@ npx tsc -b --noEmit  # typecheck
 - Import: Google Contacts (People API), generic CSV, LinkedIn Connections.csv (auto-detected)
 - Two-way Google sync: contacts added, edited or deleted here are created/updated/deleted in
   Google; the contact editor carries Google's full field set (see below)
-- Background Google sync every 15 minutes, with the connection kept alive server-side by the
-  `google-token` Edge Function
+- Background Google sync every 15 minutes while a tab is open, with the connection kept alive
+  server-side by the `google-token` Edge Function, **plus** a server-side pull on the same interval
+  (`google-sync-cron` + `sync-contacts.yml`) that keeps contacts current with no tab open at all
 - Per-contact location picker (search or click the map) for precise / missing locations
 - "Unplaced" filter on the contacts page to quickly find and fix contacts without coordinates
 - History: durable log of every contact added or removed, grouped by day, filterable by
@@ -324,9 +358,10 @@ Two things are **not** settled in code, and need a decision in the Supabase dash
 ## Project layout
 
 ```
-.github/workflows/                  Pages deploy, Supabase keepalive, feedback AI agent
+.github/workflows/                  Pages deploy, Supabase keepalive, background contacts sync, feedback AI agent
 supabase/migrations/                schema + PostGIS + RLS + grants, applied in order
 supabase/functions/google-token/    refresh-token exchange, keeps Google connected
+supabase/functions/google-sync-cron/  server-side pull, runs with nobody signed in
 supabase/functions/feedback-dispatch/  admin-only hand-off of feedback to the AI agent workflow
 src/lib/                            supabase client, geocode, countries, cities, types
 src/features/auth/                  AuthProvider, LoginPage

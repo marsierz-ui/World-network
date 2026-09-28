@@ -17,6 +17,15 @@ function normalize(s: string): string {
 
 // name -> City[] (a name can exist in several countries)
 let index: Map<string, City[]> | null = null;
+// The same keys in code-unit order, so every key sharing a prefix sits in one
+// contiguous run found by binary search instead of a scan of ~260k keys.
+let sortedKeys: string[] = [];
+// All sorted keys joined by newlines, with each key's offset, so substring
+// search is a few native indexOf calls rather than a JS loop over every key.
+let joinedKeys = '';
+let keyOffsets = new Int32Array(0);
+// normalize(c.name) per city, so substring search does not re-normalize in its loop.
+let normNames = new Map<City, string>();
 
 // Biggest first, so an unqualified "Springfield" resolves to the one most people mean.
 function byPopulation(a: City, b: City) {
@@ -65,12 +74,57 @@ function buildIndex(extra: City[] = []) {
     merged.push(...kept);
   }
 
+  const names = new Map<City, string>();
   for (const c of merged) {
-    add(normalize(c.name), c);
+    const n = normalize(c.name);
+    names.set(c, n);
+    add(n, c);
     for (const a of c.aliases ?? []) add(normalize(a), c);
   }
   for (const list of m.values()) list.sort(byPopulation);
   index = m;
+  sortedKeys = [...m.keys()].sort();
+  joinedKeys = sortedKeys.join('\n');
+  keyOffsets = new Int32Array(sortedKeys.length);
+  for (let i = 0, off = 0; i < sortedKeys.length; i++) {
+    keyOffsets[i] = off;
+    off += sortedKeys[i].length + 1;
+  }
+  normNames = names;
+}
+
+function keysContaining(q: string): string[] {
+  const out: string[] = [];
+  let from = 0;
+  for (;;) {
+    const pos = joinedKeys.indexOf(q, from);
+    if (pos === -1) return out;
+    // Last key starting at or before pos is the key the hit falls in.
+    let lo = 0;
+    let hi = keyOffsets.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (keyOffsets[mid] <= pos) lo = mid;
+      else hi = mid - 1;
+    }
+    out.push(sortedKeys[lo]);
+    from = lo + 1 < keyOffsets.length ? keyOffsets[lo + 1] : joinedKeys.length;
+  }
+}
+
+function keysWithPrefix(prefix: string): string[] {
+  let lo = 0;
+  let hi = sortedKeys.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sortedKeys[mid] < prefix) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: string[] = [];
+  for (let i = lo; i < sortedKeys.length && sortedKeys[i].startsWith(prefix); i++) {
+    out.push(sortedKeys[i]);
+  }
+  return out;
 }
 
 // Optionally enrich with the full GeoNames set generated into /cities.min.json.
@@ -122,28 +176,33 @@ export function searchCities(query: string, limit = 8): City[] {
   if (q.length < 2) return [];
 
   const starts: City[] = [];
-  const contains: City[] = [];
-  for (const [key, list] of index!) {
-    if (key.startsWith(q)) {
-      starts.push(...list);
-    } else if (key.includes(q)) {
-      // Substring hits only count against the real name. Aliases match by
-      // prefix only, otherwise obscure transliterations leak in - Guangzhou
-      // carries "kuvanco", which would surface it for "vanco".
-      contains.push(...list.filter((c) => normalize(c.name).includes(q)));
-    }
-  }
+  for (const key of keysWithPrefix(q)) starts.push(...index!.get(key)!);
   starts.sort(byPopulation);
-  contains.sort(byPopulation);
 
   const seen = new Set<City>();
   const out: City[] = [];
-  for (const c of starts.concat(contains)) {
-    if (seen.has(c)) continue;
-    seen.add(c);
-    out.push(c);
-    if (out.length >= limit) break;
+  const take = (list: City[]) => {
+    for (const c of list) {
+      if (out.length >= limit) return;
+      if (seen.has(c)) continue;
+      seen.add(c);
+      out.push(c);
+    }
+  };
+  take(starts);
+  if (out.length >= limit) return out;
+
+  // Substring hits are only needed when prefix hits did not fill the list.
+  const contains: City[] = [];
+  for (const key of keysContaining(q)) {
+    if (key.startsWith(q)) continue;
+    // Substring hits only count against the real name. Aliases match by
+    // prefix only, otherwise obscure transliterations leak in - Guangzhou
+    // carries "kuvanco", which would surface it for "vanco".
+    contains.push(...index!.get(key)!.filter((c) => normNames.get(c)!.includes(q)));
   }
+  contains.sort(byPopulation);
+  take(contains);
   return out;
 }
 
@@ -154,10 +213,9 @@ export function searchCities(query: string, limit = 8): City[] {
  */
 function qualifiedNameMatches(q: string, countryCode?: string): City[] {
   const out: City[] = [];
-  for (const [key, list] of index!) {
-    if (key.startsWith(`${q} `)) {
-      out.push(...(countryCode ? list.filter((c) => c.country === countryCode) : list));
-    }
+  for (const key of keysWithPrefix(`${q} `)) {
+    const list = index!.get(key)!;
+    out.push(...(countryCode ? list.filter((c) => c.country === countryCode) : list));
   }
   return out.sort(byPopulation);
 }
