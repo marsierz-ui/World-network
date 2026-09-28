@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Map, Marker, type MapLayerMouseEvent, type ViewState } from 'react-map-gl/maplibre';
 import { geocode, geocodeCandidates } from '../../lib/geocode';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import type { City } from '../../lib/cities';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -107,6 +107,7 @@ export function LocationPicker({ initial, city, country, onConfirm, onCancel }: 
             {...view}
             onMove={(e) => setView(e.viewState)}
             mapStyle={BASEMAP}
+            canvasContextAttributes={MAP_CANVAS_CONTEXT}
             onClick={(e: MapLayerMouseEvent) =>
               setPin({ lng: e.lngLat.lng, lat: e.lngLat.lat })
             }

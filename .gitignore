@@ -33,3 +33,6 @@ supabase/.temp
 *.njsproj
 *.sln
 *.sw?
+
+# Feedback staged for the AI agent workflow (may hold user screenshots)
+.feedback/

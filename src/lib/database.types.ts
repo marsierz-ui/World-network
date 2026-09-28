@@ -158,3 +158,24 @@ export interface ContactEvent {
   action: ContactEventAction;
   created_at: string;
 }
+
+export type FeedbackStatus = 'new' | 'triaged' | 'approved' | 'dispatched' | 'done' | 'wontfix';
+
+// supabase/migrations/20260927120000_feedback.sql. Senders set text, page and the
+// device fields; admins set status, category and admin_note; sender_email and
+// dispatched_at are filled server-side.
+export interface Feedback {
+  id: number;
+  user_id: string;
+  sender_email: string | null;
+  text: string;
+  screenshot_path: string | null;
+  page: string | null;
+  user_agent: string | null;
+  viewport: string | null;
+  status: FeedbackStatus;
+  category: string | null;
+  admin_note: string | null;
+  dispatched_at: string | null;
+  created_at: string;
+}

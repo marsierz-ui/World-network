@@ -5,7 +5,7 @@ import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
 import type { MapPoint } from './useMapData';
 import { flagImageUrl } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
-import { useBasemap, useMarkerOutline } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap, useMarkerOutline } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -143,6 +143,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}
+      canvasContextAttributes={MAP_CANVAS_CONTEXT}
       // Only the country/city threshold is stored, so panning inside one zoom
       // band writes the same value and nothing regroups.
       onLoad={(e) => setGrouping(groupingForZoom(e.target.getZoom()))}

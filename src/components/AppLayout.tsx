@@ -1,10 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../features/auth/authContext';
+import { FeedbackButton } from '../features/feedback/FeedbackButton';
+import { useIsAdmin } from '../features/feedback/useFeedback';
 import { useGoogleAutoSync } from '../features/import/useGoogleAutoSync';
 import { useTheme } from '../lib/theme';
 
 export function AppLayout() {
-  const { signOut, session } = useAuth();
+  const { signOut, session, contactsAccessMissing, signInWithGoogle } = useAuth();
+  const { data: isAdmin } = useIsAdmin();
   const theme = useTheme((s) => s.theme);
   const toggleTheme = useTheme((s) => s.toggle);
   // Mounted here, not on a page, so the sync keeps its cadence wherever the user
@@ -22,7 +25,9 @@ export function AppLayout() {
         <NavLink to="/feed">Feed</NavLink>
         <NavLink to="/import">Import</NavLink>
         <NavLink to="/settings">Settings</NavLink>
+        {isAdmin && <NavLink to="/admin">Admin</NavLink>}
         <div className="spacer" />
+        <FeedbackButton />
         {autoSync.busy && <div className="sync-note">Syncing Google...</div>}
         {autoSync.problem && (
           <NavLink to="/settings" className="sync-note warn" title={autoSync.problem}>
@@ -41,6 +46,15 @@ export function AppLayout() {
         <button className="link" onClick={signOut}>Sign out</button>
       </nav>
       <main className="content">
+        {contactsAccessMissing && (
+          <div className="scope-banner">
+            <span>
+              Google did not share your contacts, so nothing can be imported or synced. On
+              Google&apos;s screen, tick the box for your contacts.
+            </span>
+            <button onClick={signInWithGoogle}>Grant contacts access</button>
+          </div>
+        )}
         <Outlet />
       </main>
     </div>

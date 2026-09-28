@@ -4,6 +4,13 @@ import { useTheme } from './theme';
 const DARK = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 const LIGHT = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
 
+// Keeps the last frame in the WebGL buffer so the feedback screenshot
+// (features/feedback/captureScreenshot.ts) can copy the map; by default the
+// buffer is cleared once the frame is shown and the map would come out blank.
+// Module constant for the same reason as the outlines below: MapLibre reads it
+// once at creation, and a fresh object each render is needless churn.
+export const MAP_CANVAS_CONTEXT = { preserveDrawingBuffer: true } as const;
+
 export function useBasemap(): string {
   return useTheme((s) => (s.theme === 'light' ? LIGHT : DARK));
 }
