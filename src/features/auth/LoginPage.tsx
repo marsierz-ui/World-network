@@ -23,6 +23,11 @@ export function LoginPage() {
     <div className="login">
       <h1>World Network</h1>
       <p className="muted">Your network, on the map.</p>
+      <p className="muted small">
+        Place your contacts on a world map and keep them in sync with Google Contacts. If you
+        sign in with Google, the app asks to read and update your contacts for that purpose
+        only.
+      </p>
 
       <button className="btn-google" onClick={signInWithGoogle}>
         Continue with Google
@@ -54,6 +59,12 @@ export function LoginPage() {
       <button className="link" onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>
         {mode === 'in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
       </button>
+
+      <p className="muted small">
+        <a href={`${import.meta.env.BASE_URL}privacy.html`}>Privacy Policy</a>
+        {' | '}
+        <a href={`${import.meta.env.BASE_URL}terms.html`}>Terms of Service</a>
+      </p>
     </div>
   );
 }

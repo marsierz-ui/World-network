@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" type="image/svg+xml" href="./icon.svg" />
+<title>Privacy Policy - World Network</title>
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #1a1d24; --muted: #5b6270; --line: #e3e6ec; --link: #4f46e5; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --fg: #e8eaf0; --muted: #9aa1b0; --line: #262a33; --link: #8b8ff5; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 32px 0 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+  p, li { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  a { color: var(--link); }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  th, td { text-align: left; vertical-align: top; padding: 8px; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">Back to World Network</a></p>
+  <h1>Privacy Policy</h1>
+  <p class="muted">World Network - Last updated 25 October 2026</p>
+
+  <p>World Network ("the app") puts your contacts on a map of the world. It is a personal project run by marsierz-ui ("we", "us"). This policy explains what data the app handles, why, who else sees it, and how you can remove it. Contact: <a href="mailto:marsierz@gmail.com">marsierz@gmail.com</a>.</p>
+
+  <h2>What we collect</h2>
+  <table>
+    <tr><th>Data</th><th>Where it comes from</th></tr>
+    <tr><td>Account: email address, name, sign-in method</td><td>Your Google account (if you sign in with Google) or what you type when you sign up with email.</td></tr>
+    <tr><td>Your contacts: names, emails, phone numbers, postal addresses, organizations, birthdays, notes, websites, labels, and similar fields</td><td>Your Google Contacts (only if you connect Google), a CSV or LinkedIn file you import, or what you type in.</td></tr>
+    <tr><td>Places: the city and country of each contact, and coordinates worked out from them</td><td>Your contact data, or what you enter.</td></tr>
+    <tr><td>Your profile: display name, home city and country, languages, optional phone, emails and social profile links</td><td>What you enter in Settings.</td></tr>
+    <tr><td>A Google refresh token</td><td>Google, when you grant access. Kept on our server only, never in your browser.</td></tr>
+    <tr><td>A log of contacts added and removed</td><td>Created by the app, so a contact you deleted is not silently re-imported.</td></tr>
+    <tr><td>Optional LinkedIn data</td><td>Only if you use the LinkedIn import and paste your own access token.</td></tr>
+  </table>
+  <p>We do not use advertising or analytics trackers, and we do not set tracking cookies.</p>
+
+  <h2>How we use Google user data</h2>
+  <p>If you sign in with Google and allow access to your contacts, the app uses the Google People API to:</p>
+  <ul>
+    <li>read your contacts and contact labels, so they appear on your map and in your contact list;</li>
+    <li>write changes you make in the app back to the matching Google contact (two-way sync), and keep your list up to date, including in the background while the app is closed.</li>
+  </ul>
+  <p>Google data is used only to provide these features to you. We do not sell it, use it for advertising, use it to train AI or machine-learning models, or transfer it to anyone except the service providers listed below that run the app. No person reads your contacts, except the operator where needed for security, support or to meet a legal duty.</p>
+  <p>World Network's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+
+  <h2>Who else sees your data</h2>
+  <p>Your data is private to your account. Other people cannot see your contacts. The one exception is something you switch on yourself:</p>
+  <ul>
+    <li><strong>Shared LinkedIn history (optional, off by default).</strong> If you choose to share your job and education history, other app users who already have you as a contact can see it on that contact. They are matched by your email, phone or LinkedIn address. Turning sharing off, or deleting your account, removes it.</li>
+  </ul>
+  <p>Service providers that process data on our behalf:</p>
+  <ul>
+    <li><strong>Supabase</strong> - database, sign-in and server functions. Hosted in the EU (Paris).</li>
+    <li><strong>GitHub Pages</strong> - serves the website. It sees your IP address like any web host.</li>
+    <li><strong>Google</strong> - sign-in and the People API.</li>
+    <li><strong>CARTO</strong> - map tiles. Your browser requests them directly, so CARTO sees your IP address and the area of the map you view, but none of your contacts.</li>
+    <li><strong>LinkedIn</strong> - only if you use the LinkedIn import. Your token passes through our server to LinkedIn and is not stored.</li>
+  </ul>
+  <p>We may disclose data if the law requires it.</p>
+
+  <h2>Storage and security</h2>
+  <p>Data is stored in a Supabase database where every table is restricted by row-level security, so a signed-in user can only reach their own rows. The Google refresh token sits in a table that no user-facing request can read. Connections use HTTPS. No system is perfectly secure, and we cannot promise absolute security.</p>
+
+  <h2>Your browser</h2>
+  <p>The app stores your sign-in session and your light or dark theme choice in your browser's local storage, and a short-lived Google access token in session storage for the current tab. These are needed for the app to work. Clearing site data signs you out.</p>
+
+  <h2>Keeping and deleting your data</h2>
+  <ul>
+    <li><strong>Disconnect Google</strong> at any time in Settings. This revokes our access and deletes the stored token. You can also remove access at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</li>
+    <li><strong>Delete your account</strong> in Settings, then Delete account. Sync stops and the Google token is deleted immediately. Your data is kept for 30 days, during which you can sign in and restore the account, then permanently deleted. Backups may take a little longer to expire.</li>
+    <li><strong>Deleting inside the app</strong> (a contact, a label) removes it from the app. If Google sync is on, the matching Google contact is deleted too.</li>
+    <li>To ask for a copy of your data, or for anything else about it, email <a href="mailto:marsierz@gmail.com">marsierz@gmail.com</a>.</li>
+  </ul>
+  <p>Depending on where you live, you may have rights to access, correct, export or erase your data, and to object to or restrict its processing. Use the steps above or email us and we will act on your request.</p>
+
+  <h2>Children</h2>
+  <p>The app is not meant for anyone under 16, and we do not knowingly collect data from them.</p>
+
+  <h2>Changes</h2>
+  <p>If we change this policy, we will update the date above. For material changes we will tell signed-in users in the app.</p>
+</main>
+</body>
+</html>
