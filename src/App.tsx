@@ -36,7 +36,7 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<MapPage />} />
-        <Route path="mobility" element={<AdminOnly><MobilityPage /></AdminOnly>} />
+        <Route path="mobility" element={<MobilityPage />} />
         <Route path="social" element={<AdminOnly><SocialPage /></AdminOnly>} />
         <Route path="feed" element={<AdminOnly><FeedPage /></AdminOnly>} />
         <Route path="contacts" element={<ContactsPage />} />

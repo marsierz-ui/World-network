@@ -675,3 +675,13 @@ button.danger { background: var(--danger); border-color: var(--danger); }
 .bulk-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .bulk-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--text-dim); }
 .bulk-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+
+.source-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.72em; vertical-align: middle; opacity: 0.8; }
+.source-badge.linkedin_csv { color: var(--work); border-color: var(--work); }
+.source-badge.google { color: var(--accent); border-color: var(--accent); }
+.shared-history { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+.shared-history h4 { margin: 0 0 4px; }
+.shared-history h5 { margin: 12px 0 4px; }
+.shared-history ul { margin: 0; padding-left: 18px; }
+.shared-history li { margin-bottom: 6px; }
+.mob-hint { margin-bottom: 8px; font-size: 0.9em; }

@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Contact, ContactCategory, Tag } from '../lib/database.types';
+import type { Contact, ContactCategory, ContactSource, Tag } from '../lib/database.types';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import { ContactForm } from '../features/contacts/ContactForm';
 import { CustomFieldsManager } from '../features/contacts/CustomFieldsManager';
@@ -15,6 +15,8 @@ import { useContactTagMap, useCreateTag, useSetContactTags, useTags } from '../f
 import { useGoogleQueue } from '../features/import/googleQueue';
 import { LocationHistoryEditor } from '../features/mobility/LocationHistoryEditor';
 import { useIsAdmin } from '../features/auth/useIsAdmin';
+import { SharedHistory } from '../features/contacts/SharedHistory';
+import { SOURCE_LABEL } from '../lib/sources';
 import {
   useContacts,
   useCreateContact,
@@ -49,6 +51,7 @@ export function ContactsPage() {
   const [adding, setAdding] = useState(false);
   const [merging, setMerging] = useState(false);
   const [sort, setSort] = useState<SortKey>('name');
+  const [sourceFilter, setSourceFilter] = useState<ContactSource | ''>('');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   // Which contact the editor shows lives in the URL, so /contacts?id=... from
@@ -163,6 +166,7 @@ export function ContactsPage() {
     const q = norm(query);
     const rows = contacts.filter((c) => {
       if (unplacedOnly && c.current_lng != null && c.current_lat != null) return false;
+      if (sourceFilter && !c.sources.includes(sourceFilter)) return false;
       if (!q) return true;
       return (
         norm(c.full_name).includes(q) ||
@@ -177,7 +181,7 @@ export function ContactsPage() {
     return [...rows].sort((a, b) =>
       sort === 'newest' ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at),
     );
-  }, [contacts, query, unplacedOnly, sort]);
+  }, [contacts, query, unplacedOnly, sort, sourceFilter]);
 
   const visibleIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
@@ -282,6 +286,17 @@ export function ContactsPage() {
           </button>
           <select
             className="sort-select"
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value as ContactSource | '')}
+            title="Show contacts found in this source"
+          >
+            <option value="">All sources</option>
+            {(Object.keys(SOURCE_LABEL) as ContactSource[]).map((s) => (
+              <option key={s} value={s}>{SOURCE_LABEL[s]}</option>
+            ))}
+          </select>
+          <select
+            className="sort-select"
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
             title="Sort order"
@@ -354,7 +369,9 @@ export function ContactsPage() {
                   <td colSpan={9} className="muted">
                     {contacts.length === 0
                       ? 'No contacts yet. Add one or import.'
-                      : `No match for "${query}" among ${contacts.length} contacts.`}
+                      : query
+                        ? `No match for "${query}" among ${contacts.length} contacts.`
+                        : 'No contacts match the current filters.'}
                   </td>
                 </tr>
               )}
@@ -377,6 +394,7 @@ export function ContactsPage() {
             onCancel={() => { setAdding(false); setOpenId(null); }}
           />
           {editing && <TagAssigner contactId={editing.id} />}
+          {editing && <SharedHistory contactId={editing.id} />}
           {editing && isAdmin && <LocationHistoryEditor contactId={editing.id} />}
         </aside>
       )}
@@ -431,7 +449,12 @@ const ContactRow = memo(function ContactRow({
       >
         <input type="checkbox" checked={selected} onChange={() => onToggleSelect(c.id)} />
       </td>
-      <td>{c.full_name}</td>
+      <td>
+        {c.full_name}
+        {c.sources.map((s) => (
+          <span key={s} className={`source-badge ${s}`}>{SOURCE_LABEL[s]}</span>
+        ))}
+      </td>
       <td onClick={(e) => e.stopPropagation()}>
         <select
           className={`cat-select ${c.category}`}

@@ -5,7 +5,7 @@ import { enqueueGoogleDelete, enqueueGoogleSync } from '../import/googleQueue';
 import type { Contact, ContactDetails, FieldDefinition } from '../../lib/database.types';
 
 const CONTACT_COLUMNS =
-  'id,user_id,full_name,primary_email,phone,notes,avatar_url,origin_country,current_city,current_country,category,source,external_ids,custom,details,socials,current_lng,current_lat,created_at,updated_at';
+  'id,user_id,full_name,primary_email,phone,notes,avatar_url,origin_country,current_city,current_country,category,source,sources,external_ids,custom,details,socials,current_lng,current_lat,created_at,updated_at';
 
 export type ContactInput = Pick<
   Contact,

@@ -89,12 +89,19 @@ export function useBulkImport() {
 
       const { data: existing } = await supabase
         .from('contacts')
-        .select('id,full_name,primary_email,phone,details,external_ids,updated_at');
+        .select('id,full_name,primary_email,phone,details,external_ids,socials,updated_at');
       // Keep the rows: a re-sync should still apply newly-added labels to
       // contacts we already have, not drop them along with the duplicate row.
       type ExistingRow = Pick<
         Contact,
-        'id' | 'full_name' | 'primary_email' | 'phone' | 'details' | 'external_ids' | 'updated_at'
+        | 'id'
+        | 'full_name'
+        | 'primary_email'
+        | 'phone'
+        | 'details'
+        | 'external_ids'
+        | 'socials'
+        | 'updated_at'
       >;
       const existingRows = new Map<string, ExistingRow>();
       const byGoogle = new Map<string, ExistingRow>();
@@ -116,6 +123,11 @@ export function useBulkImport() {
       // name, so their edits can never reach Google. Adopt it on re-sync.
       const backfill: { id: string; external_ids: Record<string, unknown> }[] = [];
       const renames: { id: string; full_name: string }[] = [];
+      // Existing contacts this import found again, to add `source` to their sources.
+      const matched = new Set<string>();
+      // A LinkedIn profile URL the existing contact lacks; it is what matches
+      // the contact to that person's own account.
+      const socialFill: { id: string; socials: Record<string, string> }[] = [];
       let skipped = 0;
       let placed = 0;
       for (const { input, labels } of items) {
@@ -143,6 +155,13 @@ export function useBulkImport() {
         }
         if (row || seen.has(key)) {
           skipped++;
+          if (row) {
+            matched.add(row.id);
+            const li = input.socials?.linkedin;
+            if (li && !row.socials?.linkedin) {
+              socialFill.push({ id: row.id, socials: { ...row.socials, linkedin: li } });
+            }
+          }
           if (row && labels.length) {
             existingLabels.set(row.id, [...(existingLabels.get(row.id) ?? []), ...labels]);
           }
@@ -171,6 +190,7 @@ export function useBulkImport() {
           custom: input.custom,
           details: input.details ?? {},
           external_ids: input.external_ids ?? {},
+          socials: input.socials ?? {},
           source,
           current_lng: g?.lng ?? null,
           current_lat: g?.lat ?? null,
@@ -224,6 +244,23 @@ export function useBulkImport() {
             .slice(i, i + 25)
             .map((r) => supabase.from('contacts').update({ full_name: r.full_name }).eq('id', r.id)),
         );
+      }
+
+      for (let i = 0; i < socialFill.length; i += 25) {
+        await Promise.all(
+          socialFill
+            .slice(i, i + 25)
+            .map((r) => supabase.from('contacts').update({ socials: r.socials }).eq('id', r.id)),
+        );
+      }
+
+      const matchedIds = [...matched];
+      for (let i = 0; i < matchedIds.length; i += 500) {
+        const { error } = await supabase.rpc('add_contact_source', {
+          ids: matchedIds.slice(i, i + 500),
+          src: source,
+        });
+        if (error) throw error;
       }
 
       for (let i = 0; i < contactTags.length; i += 1000) {

@@ -99,9 +99,20 @@ export const fetchLinkedInConnections = (token: string, version: string) =>
   fetchSnapshotDomain(token, version, 'CONNECTIONS');
 
 // Reuse the CSV mapping/inference pipeline; LinkedIn connection keys mirror the CSV export.
+// The profile URL is kept as the contact's LinkedIn link: it is what matches
+// the contact to that person's own account if they share their history.
 export function linkedinRowsToItems(rows: Record<string, string>[]): ImportItem[] {
   const fields = [...new Set(rows.flatMap((r) => Object.keys(r)))];
-  return rowsToContacts(rows, autoMap(fields), 'linkedin_csv');
+  const mapping = autoMap(fields);
+  const items: ImportItem[] = [];
+  for (const row of rows) {
+    const [item] = rowsToContacts([row], mapping, 'linkedin_csv');
+    if (!item) continue;
+    const url = pick(row, 'url');
+    if (url) item.input.socials = { linkedin: url };
+    items.push(item);
+  }
+  return items;
 }
 
 // ---- helpers for the POSITIONS / PROFILE domains (own trajectory) ----

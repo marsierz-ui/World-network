@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useContacts } from '../features/contacts/useContacts';
 import { useAllLocationHistory } from '../features/mobility/useLocationHistory';
@@ -62,6 +63,12 @@ export function MobilityPage() {
       />
 
       <div className="mobility-panel">
+        {history.length === 0 && (
+          <div className="mob-hint">
+            No movement data yet. <Link to="/import">Import your LinkedIn profile and job history</Link>{' '}
+            first; contacts' histories appear here once they share theirs.
+          </div>
+        )}
         <div className="mob-row">
           <select value={personId} onChange={(e) => setPersonId(e.target.value)}>
             <option value="">Whole network</option>

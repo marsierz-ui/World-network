@@ -19,9 +19,9 @@ export function AppLayout() {
         <NavLink to="/" end>Map</NavLink>
         <NavLink to="/contacts">Contacts</NavLink>
         <NavLink to="/history">History</NavLink>
+        <NavLink to="/mobility">Mobility</NavLink>
         {isAdmin && (
           <>
-            <NavLink to="/mobility">Mobility</NavLink>
             <NavLink to="/social">Social</NavLink>
             <NavLink to="/feed">Feed</NavLink>
           </>

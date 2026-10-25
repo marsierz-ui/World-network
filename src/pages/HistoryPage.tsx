@@ -3,14 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useContacts } from '../features/contacts/useContacts';
 import { useContactHistory, useClearContactHistory } from '../features/contacts/useContactHistory';
 import { COUNTRY_BY_CODE } from '../lib/countries';
-import type { ContactEvent, ContactEventAction, ContactSource } from '../lib/database.types';
-
-const SOURCE_LABEL: Record<ContactSource, string> = {
-  manual: 'Manual',
-  google: 'Google',
-  csv: 'CSV',
-  linkedin_csv: 'LinkedIn',
-};
+import { SOURCE_LABEL } from '../lib/sources';
+import type { ContactEvent, ContactEventAction } from '../lib/database.types';
 
 type Filter = 'all' | ContactEventAction;
 

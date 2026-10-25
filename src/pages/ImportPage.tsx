@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '../features/auth/authContext';
-import { useIsAdmin } from '../features/auth/useIsAdmin';
 import {
   autoMap,
   MAP_TARGETS,
@@ -16,11 +15,10 @@ import { useImportLinkedInSelf } from '../features/mobility/useLinkedInSelf';
 import { useBulkImport, type ImportSummary } from '../features/import/useImport';
 
 export function ImportPage() {
-  const { isAdmin } = useIsAdmin();
   return (
     <div className="page-pad import-page">
       <h2>Import contacts</h2>
-      {isAdmin && <LinkedInImport />}
+      <LinkedInImport />
       <GoogleImport />
       <CsvImport />
     </div>
@@ -35,6 +33,7 @@ function LinkedInImport() {
   const [version, setVersion] = useState('202312');
   const [status, setStatus] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [share, setShare] = useState(false);
 
   async function resolve(): Promise<string> {
     setStatus('Finding an active LinkedIn API version...');
@@ -69,8 +68,13 @@ function LinkedInImport() {
     try {
       const v = await resolve();
       setStatus('Importing your profile + job history...');
-      const r = await self.mutateAsync({ token, version: v });
-      setStatus(`Imported your trajectory: ${r.positions} positions (${r.placed} placed). See the Mobility tab.`);
+      const r = await self.mutateAsync({ token, version: v, share });
+      setStatus(
+        `Imported your trajectory: ${r.positions} positions (${r.placed} placed). See the Mobility tab.` +
+          (r.shared == null
+            ? ''
+            : ` Shared ${r.positions} positions and ${r.shared} schools with app users who have you as a contact.`),
+      );
     } catch (e) {
       setStatus(`Failed: ${(e as Error).message}`);
     }
@@ -100,6 +104,11 @@ function LinkedInImport() {
       <label className="li-field">
         API version <span className="muted">(auto-detected; override only if needed)</span>
         <input value={version} onChange={(e) => setVersion(e.target.value)} />
+      </label>
+      <label className="checkbox">
+        <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
+        Share my job and education history with app users who have me as a contact (matched by
+        the email, phone and LinkedIn URL in Settings). Importing again with this off stops sharing.
       </label>
       <div className="actions-row">
         <button onClick={run} disabled={bulk.isPending || !token.trim()}>

@@ -18,6 +18,10 @@ export interface Profile {
   share_on_leaderboard: boolean;
   google_sync_enabled: boolean;
   google_last_synced: string | null;
+  /** Identity used to match this user to other users' contacts. */
+  phone: string | null;
+  emails: string[];
+  socials: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -91,7 +95,10 @@ export interface Contact {
   current_city: string | null;
   current_country: string | null;
   category: ContactCategory;
+  /** The import that created the row. */
   source: ContactSource;
+  /** Every source the contact was found in; always includes `source`. */
+  sources: ContactSource[];
   external_ids: Record<string, unknown>;
   custom: Record<string, unknown>;
   details: ContactDetails;
@@ -157,4 +164,30 @@ export interface ContactEvent {
   source: ContactSource | null;
   action: ContactEventAction;
   created_at: string;
+}
+
+export interface SharedPosition {
+  company: string;
+  title: string;
+  location: string;
+  from: string | null;
+  to: string | null;
+}
+
+export interface SharedEducation {
+  school: string;
+  degree: string;
+  from: string | null;
+  to: string | null;
+}
+
+// A row of shared_linkedin_for_my_contacts(): another user's opted-in
+// LinkedIn history, matched to one of the caller's contacts.
+export interface SharedLinkedIn {
+  contact_id: string;
+  full_name: string | null;
+  headline: string | null;
+  positions: SharedPosition[];
+  education: SharedEducation[];
+  updated_at: string;
 }
