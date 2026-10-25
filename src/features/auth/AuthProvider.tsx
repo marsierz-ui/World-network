@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import {
   clearGoogleToken,
@@ -30,16 +31,28 @@ function captureGoogleTokens(session: Session | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Query results are keyed by query, not by user. Drop them whenever the
+    // signed-in user changes (sign-out, or another account signing in from a
+    // second tab) so one person's contacts never render for the next.
+    let currentUser: string | null = null;
+    const track = (s: Session | null) => {
+      const next = s?.user.id ?? null;
+      if (currentUser !== null && next !== currentUser) qc.clear();
+      currentUser = next;
+    };
     supabase.auth.getSession().then(({ data }) => {
+      track(data.session);
       captureGoogleTokens(data.session);
       setSession(data.session);
       setLoading(false);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      track(s);
       // Deferred: supabase-js warns against calling back into the client from
       // inside this callback, and captureGoogleTokens invokes an Edge Function.
       setTimeout(() => {
@@ -49,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
     });
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [qc]);
 
   const value: AuthState = {
     session,

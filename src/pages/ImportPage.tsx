@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../features/auth/authContext';
+import { useIsAdmin } from '../features/auth/useIsAdmin';
 import {
   autoMap,
   MAP_TARGETS,
@@ -15,10 +16,11 @@ import { useImportLinkedInSelf } from '../features/mobility/useLinkedInSelf';
 import { useBulkImport, type ImportSummary } from '../features/import/useImport';
 
 export function ImportPage() {
+  const { isAdmin } = useIsAdmin();
   return (
     <div className="page-pad import-page">
       <h2>Import contacts</h2>
-      <LinkedInImport />
+      {isAdmin && <LinkedInImport />}
       <GoogleImport />
       <CsvImport />
     </div>

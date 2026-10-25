@@ -298,6 +298,18 @@ you ever rebuild the project.
 the only caller and it has nothing but the anon key. It writes at most once a minute and returns a
 timestamp, so an unmetered caller gains nothing.
 
+**Admin.** The Mobility, Social and Feed pages (plus per-contact location history and the LinkedIn
+self-import) are shown only to admins. Admins are rows in `public.admins`, which has RLS on, no
+policies and no client grants, so a user cannot promote themselves; the app asks `is_admin()`, which
+answers for the caller only. Promote someone in the SQL editor:
+
+```sql
+insert into public.admins (user_id) select id from auth.users where email = 'you@example.com';
+```
+
+This gates the UI, not data: those pages read the same owner-scoped tables every other page does,
+and the Bluesky/Mastodon calls go from the browser to public APIs.
+
 Two things are **not** settled in code, and need a decision in the Supabase dashboard:
 
 - **Leaked-password protection is off** (Authentication -> Providers -> Email). Turning it on

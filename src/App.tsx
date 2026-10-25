@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './features/auth/authContext';
+import { useIsAdmin } from './features/auth/useIsAdmin';
 import { LoginPage } from './features/auth/LoginPage';
 import { AppLayout } from './components/AppLayout';
 import { MapPage } from './pages/MapPage';
@@ -11,6 +13,12 @@ import { HistoryPage } from './pages/HistoryPage';
 import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
 
+function AdminOnly({ children }: { children: ReactNode }) {
+  const { isAdmin, loading } = useIsAdmin();
+  if (loading) return <div className="center-screen">Loading...</div>;
+  return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
+}
+
 export function App() {
   const { session, loading } = useAuth();
 
@@ -21,9 +29,9 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<MapPage />} />
-        <Route path="mobility" element={<MobilityPage />} />
-        <Route path="social" element={<SocialPage />} />
-        <Route path="feed" element={<FeedPage />} />
+        <Route path="mobility" element={<AdminOnly><MobilityPage /></AdminOnly>} />
+        <Route path="social" element={<AdminOnly><SocialPage /></AdminOnly>} />
+        <Route path="feed" element={<AdminOnly><FeedPage /></AdminOnly>} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="import" element={<ImportPage />} />

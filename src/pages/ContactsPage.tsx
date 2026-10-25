@@ -14,6 +14,7 @@ import { InlineTags } from '../features/tags/InlineTags';
 import { useContactTagMap, useCreateTag, useSetContactTags, useTags } from '../features/tags/useTags';
 import { useGoogleQueue } from '../features/import/googleQueue';
 import { LocationHistoryEditor } from '../features/mobility/LocationHistoryEditor';
+import { useIsAdmin } from '../features/auth/useIsAdmin';
 import {
   useContacts,
   useCreateContact,
@@ -30,6 +31,7 @@ type SortKey = 'name' | 'newest' | 'oldest';
 const NO_TAGS: string[] = [];
 
 export function ContactsPage() {
+  const { isAdmin } = useIsAdmin();
   const { data: contacts = [], isLoading } = useContacts();
   const { data: fields = [] } = useFieldDefinitions();
   const { data: tags = [] } = useTags();
@@ -375,7 +377,7 @@ export function ContactsPage() {
             onCancel={() => { setAdding(false); setOpenId(null); }}
           />
           {editing && <TagAssigner contactId={editing.id} />}
-          {editing && <LocationHistoryEditor contactId={editing.id} />}
+          {editing && isAdmin && <LocationHistoryEditor contactId={editing.id} />}
         </aside>
       )}
 

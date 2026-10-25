@@ -2,7 +2,7 @@ import { PLATFORMS, toUrl } from '../../lib/socials';
 
 export function SocialLinks({ socials }: { socials?: Record<string, string> }) {
   if (!socials) return null;
-  const entries = PLATFORMS.filter((p) => socials[p.key]?.trim());
+  const entries = PLATFORMS.filter((p) => socials[p.key]?.trim() && toUrl(p.key, socials[p.key]));
   if (entries.length === 0) return null;
   return (
     <span className="social-links" onClick={(e) => e.stopPropagation()}>

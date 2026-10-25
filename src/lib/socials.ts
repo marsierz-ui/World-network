@@ -27,13 +27,20 @@ function mastodonUrl(v: string): string {
   return instance ? `https://${instance}/@${user}` : v;
 }
 
-export function toUrl(platform: string, value: string): string {
+// Handles and post URLs come from imports and from other people's servers, so
+// only ever put http(s) in an href: a javascript: or data: value would run in
+// this origin when clicked.
+export function safeHttpUrl(url: string): string | undefined {
+  return /^https?:\/\//i.test(url.trim()) ? url.trim() : undefined;
+}
+
+export function toUrl(platform: string, value: string): string | undefined {
   const v = value.trim();
   if (/^https?:\/\//i.test(v)) return v;
-  if (platform === 'mastodon') return mastodonUrl(v);
+  if (platform === 'mastodon') return safeHttpUrl(mastodonUrl(v));
   const p = PLATFORMS.find((x) => x.key === platform);
-  if (!p) return v;
-  return p.base + v.replace(/^@/, '');
+  if (!p) return safeHttpUrl(v);
+  return safeHttpUrl(p.base + v.replace(/^@/, ''));
 }
 
 // Deep link to search a platform for a person's name (assisted-manual matching).

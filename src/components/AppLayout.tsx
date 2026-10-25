@@ -1,10 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../features/auth/authContext';
+import { useIsAdmin } from '../features/auth/useIsAdmin';
 import { useGoogleAutoSync } from '../features/import/useGoogleAutoSync';
 import { useTheme } from '../lib/theme';
 
 export function AppLayout() {
   const { signOut, session } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const theme = useTheme((s) => s.theme);
   const toggleTheme = useTheme((s) => s.toggle);
   // Mounted here, not on a page, so the sync keeps its cadence wherever the user
@@ -17,9 +19,13 @@ export function AppLayout() {
         <NavLink to="/" end>Map</NavLink>
         <NavLink to="/contacts">Contacts</NavLink>
         <NavLink to="/history">History</NavLink>
-        <NavLink to="/mobility">Mobility</NavLink>
-        <NavLink to="/social">Social</NavLink>
-        <NavLink to="/feed">Feed</NavLink>
+        {isAdmin && (
+          <>
+            <NavLink to="/mobility">Mobility</NavLink>
+            <NavLink to="/social">Social</NavLink>
+            <NavLink to="/feed">Feed</NavLink>
+          </>
+        )}
         <NavLink to="/import">Import</NavLink>
         <NavLink to="/settings">Settings</NavLink>
         <div className="spacer" />

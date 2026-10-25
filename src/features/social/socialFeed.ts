@@ -1,4 +1,5 @@
 import type { Contact } from '../../lib/database.types';
+import { safeHttpUrl } from '../../lib/socials';
 
 export interface SocialPost {
   id: string;
@@ -72,7 +73,7 @@ async function fetchMastodon(value: string, contact: Contact): Promise<SocialPos
   if (!st.ok) throw new Error(`mastodon statuses ${st.status}`);
   const statuses = await st.json();
   return (statuses as { id: string; created_at: string; content: string; url: string }[])
-    .filter((s) => s.content)
+    .filter((s) => s.content && safeHttpUrl(String(s.url)))
     .map((s) => ({
       id: s.id,
       platform: 'mastodon' as const,
