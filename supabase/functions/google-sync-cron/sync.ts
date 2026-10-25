@@ -13,6 +13,16 @@ function dedupeKey(name: string, email?: string | null) {
   return email ? `e:${email.toLowerCase()}` : `n:${name.toLowerCase()}`;
 }
 
+/** Last 9 digits of each number of 7+ digits, so +49 151..., 0151... and spaced forms compare equal. */
+export function phoneKeys(phone: string | null | undefined, list?: { value?: string }[]): string[] {
+  const keys = new Set<string>();
+  for (const v of [phone, ...(list ?? []).map((p) => p.value)]) {
+    const digits = (v ?? '').replace(/\D/g, '');
+    if (digits.length >= 7) keys.add(digits.slice(-9));
+  }
+  return [...keys];
+}
+
 /**
  * Contacts deliberately deleted here at some point. Imported unattended, a
  * background sync has no one to ask before resurrecting one, so these are
@@ -75,15 +85,28 @@ export async function importForUser(
   admin: SupabaseClient,
   userId: string,
   items: PulledContact[],
+  since: string | null = null,
 ): Promise<ImportSummary> {
   const { data: existing } = await admin
     .from('contacts')
-    .select('id,full_name,primary_email,external_ids')
+    .select('id,full_name,primary_email,phone,details,external_ids,updated_at')
     .eq('user_id', userId);
-  type ExistingRow = { id: string; full_name: string; primary_email: string | null; external_ids: Record<string, unknown> };
+  type ExistingRow = {
+    id: string;
+    full_name: string;
+    primary_email: string | null;
+    phone: string | null;
+    details: { phones?: { value?: string }[] } | null;
+    external_ids: Record<string, unknown>;
+    updated_at: string;
+  };
   const existingRows = new Map<string, ExistingRow>();
+  const byGoogle = new Map<string, ExistingRow>();
+  const byPhone = new Map<string, ExistingRow>();
   for (const c of (existing as ExistingRow[] | null) ?? []) {
     existingRows.set(dedupeKey(c.full_name, c.primary_email), c);
+    if (typeof c.external_ids?.google === 'string') byGoogle.set(c.external_ids.google, c);
+    for (const p of phoneKeys(c.phone, c.details?.phones)) byPhone.set(p, c);
   }
   const seen = new Set(existingRows.keys());
 
@@ -91,13 +114,29 @@ export async function importForUser(
   const rowLabels: string[][] = [];
   const existingLabels = new Map<string, string[]>();
   const backfill: { id: string; external_ids: Record<string, unknown> }[] = [];
+  const renames: { id: string; full_name: string }[] = [];
   let skipped = 0;
 
   for (const item of items) {
     const key = dedupeKey(item.full_name, item.primary_email);
-    if (seen.has(key)) {
+    // Same person under a changed name: the Google link first, then any shared
+    // phone number.
+    let row = existingRows.get(key);
+    if (!row && item.google_resource_name) row = byGoogle.get(item.google_resource_name);
+    if (!row) {
+      for (const p of phoneKeys(item.phone, item.details?.phones)) {
+        row = byPhone.get(p);
+        if (row) break;
+      }
+    }
+    if (row && !existingRows.has(key)) {
+      // Renamed in Google: take the new name, unless it was edited here since the last sync.
+      if (row.full_name !== item.full_name && (!since || row.updated_at <= since)) {
+        renames.push({ id: row.id, full_name: item.full_name });
+      }
+    }
+    if (row || seen.has(key)) {
       skipped++;
-      const row = existingRows.get(key);
       if (row && item.labels.length) {
         existingLabels.set(row.id, [...(existingLabels.get(row.id) ?? []), ...item.labels]);
       }
@@ -157,6 +196,12 @@ export async function importForUser(
   for (let i = 0; i < backfill.length; i += 25) {
     await Promise.all(
       backfill.slice(i, i + 25).map((b) => admin.from('contacts').update({ external_ids: b.external_ids }).eq('id', b.id)),
+    );
+  }
+
+  for (let i = 0; i < renames.length; i += 25) {
+    await Promise.all(
+      renames.slice(i, i + 25).map((r) => admin.from('contacts').update({ full_name: r.full_name }).eq('id', r.id)),
     );
   }
 

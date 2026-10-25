@@ -42,6 +42,16 @@ export async function findDeletedMatches(items: ImportItem[]): Promise<ImportIte
   );
 }
 
+/** Last 9 digits of each number of 7+ digits, so +49 151..., 0151... and spaced forms compare equal. */
+function phoneKeys(phone: string | null | undefined, list?: { value?: string }[]): string[] {
+  const keys = new Set<string>();
+  for (const v of [phone, ...(list ?? []).map((p) => p.value)]) {
+    const digits = (v ?? '').replace(/\D/g, '');
+    if (digits.length >= 7) keys.add(digits.slice(-9));
+  }
+  return [...keys];
+}
+
 // Ensure a tag exists for every label name; returns lowercased-name -> tag id.
 async function ensureTags(userId: string, labelNames: string[]): Promise<Map<string, string>> {
   const map = new Map<string, string>();
@@ -67,22 +77,33 @@ export function useBulkImport() {
     mutationFn: async ({
       items,
       source,
+      since = null,
     }: {
       items: ImportItem[];
       source: ContactSource;
+      /** Last sync time: a name edited here after it is not overwritten by a rename from Google. */
+      since?: string | null;
     }): Promise<ImportSummary> => {
       const { data: u } = await supabase.auth.getUser();
       const userId = u.user!.id;
 
       const { data: existing } = await supabase
         .from('contacts')
-        .select('id,full_name,primary_email,external_ids');
+        .select('id,full_name,primary_email,phone,details,external_ids,updated_at');
       // Keep the rows: a re-sync should still apply newly-added labels to
       // contacts we already have, not drop them along with the duplicate row.
-      type ExistingRow = Pick<Contact, 'id' | 'full_name' | 'primary_email' | 'external_ids'>;
+      type ExistingRow = Pick<
+        Contact,
+        'id' | 'full_name' | 'primary_email' | 'phone' | 'details' | 'external_ids' | 'updated_at'
+      >;
       const existingRows = new Map<string, ExistingRow>();
+      const byGoogle = new Map<string, ExistingRow>();
+      const byPhone = new Map<string, ExistingRow>();
       for (const c of (existing as ExistingRow[] | null) ?? []) {
         existingRows.set(dedupeKey(c.full_name, c.primary_email), c);
+        const rn = c.external_ids?.google;
+        if (typeof rn === 'string') byGoogle.set(rn, c);
+        for (const p of phoneKeys(c.phone, c.details?.phones)) byPhone.set(p, c);
       }
       const seen = new Set(existingRows.keys());
 
@@ -94,13 +115,30 @@ export function useBulkImport() {
       // Contacts imported before two-way sync existed carry no Google resource
       // name, so their edits can never reach Google. Adopt it on re-sync.
       const backfill: { id: string; external_ids: Record<string, unknown> }[] = [];
+      const renames: { id: string; full_name: string }[] = [];
       let skipped = 0;
       let placed = 0;
       for (const { input, labels } of items) {
         const key = dedupeKey(input.full_name, input.primary_email);
-        if (seen.has(key)) {
+        // Same person under a changed name: the Google link first, then any
+        // shared phone number.
+        let row = existingRows.get(key);
+        const gid = input.external_ids?.google;
+        if (!row && typeof gid === 'string') row = byGoogle.get(gid);
+        if (!row) {
+          for (const p of phoneKeys(input.phone, input.details?.phones)) {
+            row = byPhone.get(p);
+            if (row) break;
+          }
+        }
+        if (row && !existingRows.has(key)) {
+          // Renamed in Google: take the new name, unless it was edited here since the last sync.
+          if (row.full_name !== input.full_name && (!since || row.updated_at <= since)) {
+            renames.push({ id: row.id, full_name: input.full_name });
+          }
+        }
+        if (row || seen.has(key)) {
           skipped++;
-          const row = existingRows.get(key);
           if (row && labels.length) {
             existingLabels.set(row.id, [...(existingLabels.get(row.id) ?? []), ...labels]);
           }
@@ -173,6 +211,14 @@ export function useBulkImport() {
             .map((b) =>
               supabase.from('contacts').update({ external_ids: b.external_ids }).eq('id', b.id),
             ),
+        );
+      }
+
+      for (let i = 0; i < renames.length; i += 25) {
+        await Promise.all(
+          renames
+            .slice(i, i + 25)
+            .map((r) => supabase.from('contacts').update({ full_name: r.full_name }).eq('id', r.id)),
         );
       }
 

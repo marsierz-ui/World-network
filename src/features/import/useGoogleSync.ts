@@ -61,7 +61,7 @@ export function useGoogleSync() {
   }
 
   async function importItems(items: ImportItem[], since: string | null) {
-    const result = await bulk.mutateAsync({ items, source: 'google' });
+    const result = await bulk.mutateAsync({ items, source: 'google', since });
     setSummary(result);
 
     // No previous sync means no window to push: every contact would look new,

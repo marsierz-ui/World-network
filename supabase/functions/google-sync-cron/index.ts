@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
       const deletedKeys = await findDeletedContactKeys(admin, cred.user_id);
       const importable = pulled.filter((c) => !deletedKeys.has(dedupeKey(c.full_name, c.primary_email)));
 
-      const summary = await importForUser(admin, cred.user_id, importable);
+      const summary = await importForUser(admin, cred.user_id, importable, profile.google_last_synced);
 
       await admin.from('profiles').update({ google_last_synced: new Date().toISOString() }).eq('user_id', cred.user_id);
       results.push({ user_id: cred.user_id, status: 'synced', inserted: summary.inserted });
