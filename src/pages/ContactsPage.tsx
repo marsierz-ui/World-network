@@ -244,7 +244,12 @@ export function ContactsPage() {
 
   function handleSubmit(input: ContactInput) {
     if (editing) {
-      update.mutate({ id: editing.id, input }, { onSuccess: () => setOpenId(null) });
+      // useUpdateContact's onMutate already writes the edit into the table
+      // optimistically, on this same tick - closing here instead of waiting
+      // for onSuccess is what makes Save feel instant instead of frozen for
+      // the round trip. onError still rolls the row back if the save fails.
+      setOpenId(null);
+      update.mutate({ id: editing.id, input });
     } else {
       create.mutate(input, { onSuccess: () => setAdding(false) });
     }
