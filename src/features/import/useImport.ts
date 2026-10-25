@@ -127,8 +127,12 @@ export function useBulkImport() {
         if (!row && typeof gid === 'string') row = byGoogle.get(gid);
         if (!row) {
           for (const p of phoneKeys(input.phone, input.details?.phones)) {
-            row = byPhone.get(p);
-            if (row) break;
+            const cand = byPhone.get(p);
+            // A row already linked to another Google contact is a different person who shares the number.
+            if (cand && (!cand.external_ids?.google || cand.external_ids.google === gid)) {
+              row = cand;
+              break;
+            }
           }
         }
         if (row && !existingRows.has(key)) {

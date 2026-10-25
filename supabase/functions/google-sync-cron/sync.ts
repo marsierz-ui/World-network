@@ -125,8 +125,12 @@ export async function importForUser(
     if (!row && item.google_resource_name) row = byGoogle.get(item.google_resource_name);
     if (!row) {
       for (const p of phoneKeys(item.phone, item.details?.phones)) {
-        row = byPhone.get(p);
-        if (row) break;
+        const cand = byPhone.get(p);
+        // A row already linked to another Google contact is a different person who shares the number.
+        if (cand && (!cand.external_ids?.google || cand.external_ids.google === item.google_resource_name)) {
+          row = cand;
+          break;
+        }
       }
     }
     if (row && !existingRows.has(key)) {
