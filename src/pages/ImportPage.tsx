@@ -84,7 +84,7 @@ function LinkedInImport() {
           OAuth Token Generator
         </a>{' '}
         and paste it below. Pulls your connections via the Member Snapshot API. EEA/Switzerland
-        members only. (Works while running the local dev server, which proxies the LinkedIn API.)
+        members only.
       </p>
       <label className="li-field">
         Access token

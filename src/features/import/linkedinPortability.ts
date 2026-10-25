@@ -1,10 +1,23 @@
+import { supabase } from '../../lib/supabase';
 import { autoMap, rowsToContacts, type ImportItem } from './parseCsv';
 
 // LinkedIn Member Data Portability - Member Snapshot API.
-// Called through the Vite dev proxy (/linkedin-api -> https://api.linkedin.com) to avoid CORS.
+// Called through the linkedin-proxy edge function (supabase/functions) to avoid CORS.
 // Docs: https://learn.microsoft.com/en-us/linkedin/dma/member-data-portability/shared/member-snapshot-api
 
-const BASE = '/linkedin-api/rest/memberSnapshotData';
+const BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/linkedin-proxy`;
+
+async function snapshotFetch(token: string, version: string, domain: string, start: number) {
+  const { data } = await supabase.auth.getSession();
+  return fetch(`${BASE}?q=criteria&domain=${domain}&start=${start}`, {
+    headers: {
+      Authorization: `Bearer ${data.session?.access_token ?? ''}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      'x-linkedin-token': token.trim(),
+      'linkedin-version': version.trim(),
+    },
+  });
+}
 
 // memberSnapshotData is pinned to 202312 and rejects everything else with 426:
 // "This endpoint only supports 202312." The monthly version numbers published
@@ -28,13 +41,7 @@ export async function resolveActiveVersion(token: string, preferred?: string): P
   for (const version of list) {
     if (tried.has(version)) continue;
     tried.add(version);
-    const res = await fetch(`${BASE}?q=criteria&domain=PROFILE&start=0`, {
-      headers: {
-        Authorization: `Bearer ${token.trim()}`,
-        'Linkedin-Version': version,
-        'Content-Type': 'application/json',
-      },
-    });
+    const res = await snapshotFetch(token, version, 'PROFILE', 0);
     if (res.status === 401 || res.status === 403) {
       throw new Error(
         `LinkedIn auth failed (${res.status}). The token is invalid or lacks a portability scope ` +
@@ -69,14 +76,7 @@ export async function fetchSnapshotDomain(
   let start = 0;
 
   for (let i = 0; i < 200; i++) {
-    const url = `${BASE}?q=criteria&domain=${domain}&start=${start}`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token.trim()}`,
-        'Linkedin-Version': version.trim(),
-        'Content-Type': 'application/json',
-      },
-    });
+    const res = await snapshotFetch(token, version, domain, start);
 
     if (!res.ok) {
       if (start > 0 && res.status === 400) break; // end-of-data signal
