@@ -3,6 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './features/auth/authContext';
 import { useIsAdmin } from './features/auth/useIsAdmin';
 import { LoginPage } from './features/auth/LoginPage';
+import { PendingDeletionPage } from './features/account/PendingDeletionPage';
+import { usePendingDeletion } from './features/account/useAccountDeletion';
 import { AppLayout } from './components/AppLayout';
 import { MapPage } from './pages/MapPage';
 import { MobilityPage } from './pages/MobilityPage';
@@ -21,9 +23,14 @@ function AdminOnly({ children }: { children: ReactNode }) {
 
 export function App() {
   const { session, loading } = useAuth();
+  const pending = usePendingDeletion();
 
   if (loading) return <div className="center-screen">Loading...</div>;
   if (!session) return <LoginPage />;
+  if (pending.isLoading) return <div className="center-screen">Loading...</div>;
+  // The app (and with it the Google auto-sync in AppLayout) never mounts for an
+  // account waiting out its deletion.
+  if (pending.data) return <PendingDeletionPage pending={pending.data} />;
 
   return (
     <Routes>

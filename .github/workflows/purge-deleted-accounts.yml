@@ -1,0 +1,25 @@
+name: Purge deleted accounts
+
+# Accounts a user deleted are kept for 30 days (see supabase/functions/delete-account)
+# so a mistake or a stolen session can be undone. This is the job that removes the
+# ones whose 30 days are up. Disable this workflow to stop all permanent deletion.
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call account-purge
+        env:
+          URL: ${{ secrets.VITE_SUPABASE_URL }}
+          CRON_SECRET: ${{ secrets.SYNC_CRON_SECRET }}
+        run: |
+          code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' -X POST \
+            "$URL/functions/v1/account-purge" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H 'Content-Type: application/json')
+          echo "HTTP $code"; cat /tmp/out.txt
+          test "$code" = "200"

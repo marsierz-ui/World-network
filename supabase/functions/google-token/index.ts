@@ -82,6 +82,14 @@ Deno.serve(async (req) => {
   if (action === 'store') {
     const refreshToken = body?.refresh_token;
     if (typeof refreshToken !== 'string' || !refreshToken) return fail('missing_refresh_token', undefined, origin);
+    // An account waiting out its deletion keeps no Google grant: signing back in
+    // to restore it must not quietly reconnect sync (see delete-account).
+    const { data: pending } = await admin
+      .from('account_deletions')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (pending) return fail('account_pending_deletion', undefined, origin);
     const { error } = await admin.from('google_credentials').upsert({
       user_id: userId,
       refresh_token: refreshToken,

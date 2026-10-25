@@ -6,6 +6,7 @@ import { useTheme } from '../lib/theme';
 import { SearchSelect } from '../components/SearchSelect';
 import { ComboSelect } from '../components/ComboSelect';
 import { GoogleConnections } from '../features/import/GoogleConnections';
+import { DeleteAccountCard } from '../features/account/DeleteAccountCard';
 import { LabelManager } from '../features/tags/LabelManager';
 import type { Profile } from '../lib/database.types';
 
@@ -32,6 +33,9 @@ export function SettingsPage() {
 
       <h2 className="conn-title">Connections</h2>
       <GoogleConnections />
+
+      <h2 className="conn-title">Delete account</h2>
+      <DeleteAccountCard />
     </div>
   );
 }

@@ -119,6 +119,13 @@ gh secret set SYNC_CRON_SECRET   # same value as CRON_SECRET above
 that header, the same shape as `keepalive.yml`'s ping. Without the two secrets set, the workflow
 fails loudly (the function answers 401/500) rather than silently doing nothing.
 
+The function runs in two modes. Called with no body it is a dispatcher: it asks the database who is
+due (`due_google_syncs`, from `20261025130000_account_deletion.sql` - apply that before deploying),
+oldest-synced first and at most 40 users, then calls itself once per user in parallel. Each user is
+synced in their own invocation, so one slow or failing account cannot use up the time of the others,
+and a user that keeps failing goes to the back of the queue instead of blocking it. The response
+reports counts only, never user ids, because workflow logs may be public.
+
 This is deliberately **pull only** - it imports Google's contacts here, the same way opening the
 Import page or a background tab-sync does, but never pushes local edits to Google unattended.
 Local edits already push to Google the moment they are saved (`googleQueue.ts`), live, in the
@@ -309,6 +316,22 @@ insert into public.admins (user_id) select id from auth.users where email = 'you
 
 This gates the UI, not data: those pages read the same owner-scoped tables every other page does,
 and the Bluesky/Mastodon calls go from the browser to public APIs.
+
+**Account deletion is a request, not an instant delete.** Settings -> Delete account calls the
+`delete-account` Edge Function, which records a row in `account_deletions`, revokes and drops the
+Google grant, switches sync off and signs the user out. Nothing is removed for 30 days; signing back
+in shows a restore screen. Only `account-purge` (daily, `purge-deleted-accounts.yml`, same
+`SYNC_CRON_SECRET`) permanently deletes the auth user once the 30 days are up, and every table
+cascades from it. Admin accounts are refused at request time and skipped by the purge, so a stolen
+admin session cannot take the owner's data. Disable that workflow to stop all permanent deletion.
+Deploy order: apply `20261025130000_account_deletion.sql`, then
+
+```bash
+supabase functions deploy delete-account
+supabase functions deploy account-purge --no-verify-jwt
+supabase functions deploy google-token
+supabase functions deploy google-sync-cron --no-verify-jwt
+```
 
 Two things are **not** settled in code, and need a decision in the Supabase dashboard:
 
