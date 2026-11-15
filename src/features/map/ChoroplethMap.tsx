@@ -191,7 +191,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
           id="country-selected"
           type="line"
           filter={['==', ['get', 'code'], selected?.country ?? '']}
-          paint={{ 'line-color': '#6366f1', 'line-width': 2.5 }}
+          paint={{ 'line-color': '#3f5bb8', 'line-width': 2.5 }}
         />
       </Source>
 

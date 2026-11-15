@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useProfile, useUpdateProfile } from '../features/profile/useProfile';
-import { COUNTRIES } from '../lib/countries';
+import { COUNTRIES, COUNTRY_BY_CODE } from '../lib/countries';
 import { LANGUAGES } from '../lib/languages';
 import { useTheme } from '../lib/theme';
 import { SearchSelect } from '../components/SearchSelect';
@@ -9,10 +9,15 @@ import { GoogleConnections } from '../features/import/GoogleConnections';
 import { DeleteAccountCard } from '../features/account/DeleteAccountCard';
 import { LabelManager } from '../features/tags/LabelManager';
 import { PLATFORMS } from '../lib/socials';
+import { geocode, loadCityDataset } from '../lib/geocode';
+import { cityPatch, detectCity } from '../features/visits/useCityLocation';
+import { useIsAdmin } from '../features/auth/useIsAdmin';
+import { FeedbackInbox } from '../features/feedback/Feedback';
 import type { Profile } from '../lib/database.types';
 
 export function SettingsPage() {
   const { data: profile, isLoading } = useProfile();
+  const { isAdmin } = useIsAdmin();
   return (
     <div className="page-pad form-narrow">
       <h2>Settings</h2>
@@ -23,6 +28,13 @@ export function SettingsPage() {
       ) : (
         <ProfileForm key={profile.user_id} profile={profile} />
       )}
+      {profile && (
+        <>
+          <h2 className="conn-title">Location</h2>
+          <LocationCard profile={profile} />
+        </>
+      )}
+
       <h2 className="conn-title">Labels</h2>
       <div className="connection-card">
         <div className="muted" style={{ marginBottom: 10 }}>
@@ -34,6 +46,13 @@ export function SettingsPage() {
 
       <h2 className="conn-title">Connections</h2>
       <GoogleConnections />
+
+      {isAdmin && (
+        <>
+          <h2 className="conn-title">Feedback inbox</h2>
+          <FeedbackInbox />
+        </>
+      )}
 
       <h2 className="conn-title">Delete account</h2>
       <DeleteAccountCard />
@@ -73,6 +92,74 @@ function AppearanceCard() {
   );
 }
 
+function LocationCard({ profile }: { profile: Profile }) {
+  const update = useUpdateProfile();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  async function toggle(on: boolean) {
+    setNote(null);
+    if (!on) {
+      // Off also forgets: nothing is left for connected members to see.
+      update.mutate({
+        location_enabled: false,
+        current_city: null,
+        current_country: null,
+        current_lng: null,
+        current_lat: null,
+        location_updated_at: null,
+      });
+      return;
+    }
+    setBusy(true);
+    const city = await detectCity();
+    setBusy(false);
+    if (!city) {
+      setNote('Your browser did not share a location. Allow it for this site and try again.');
+      return;
+    }
+    update.mutate({ location_enabled: true, ...cityPatch(city) });
+  }
+
+  return (
+    <div className="connection-card">
+      <div className="conn-head">
+        <div>
+          <strong>Use the city I am in</strong>
+          <div className="muted">
+            When you open the app away from home, it shows who you know there. Members you are
+            connected with can see the city too.
+          </div>
+        </div>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={profile.location_enabled}
+            disabled={busy || update.isPending}
+            onChange={(e) => void toggle(e.target.checked)}
+          />
+          <span className="slider" />
+        </label>
+      </div>
+      <p className="muted small">
+        City only. Your device works out the nearest city and that is all that is saved: no
+        address, no coordinates of where you stand, no history of where you were. Switching this
+        off deletes the saved city.
+      </p>
+      {busy && <div className="muted">Finding your city...</div>}
+      {profile.location_enabled && profile.current_city && (
+        <div className="muted">
+          Currently: {profile.current_city}
+          {profile.current_country
+            ? `, ${COUNTRY_BY_CODE.get(profile.current_country)?.name ?? profile.current_country}`
+            : ''}
+        </div>
+      )}
+      {note && <div className="error">{note}</div>}
+    </div>
+  );
+}
+
 function ProfileForm({ profile }: { profile: Profile }) {
   const update = useUpdateProfile();
   const [displayName, setDisplayName] = useState(profile.display_name ?? '');
@@ -83,13 +170,22 @@ function ProfileForm({ profile }: { profile: Profile }) {
   const [phone, setPhone] = useState(profile.phone ?? '');
   const [emails, setEmails] = useState(profile.emails.join(', '));
   const [socials, setSocials] = useState<Record<string, string>>(profile.socials);
+  const [linkedinConsent, setLinkedinConsent] = useState(profile.linkedin_location_consent);
 
-  function save(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
+    // Stored with the profile so the card and the visit alerts have a point to
+    // measure from. Waits for the full city list: the curated one would place
+    // most towns on their country's centroid.
+    await loadCityDataset();
+    const home = geocode(homeCity, homeCountry);
     update.mutate({
       display_name: displayName || null,
       home_city: homeCity || null,
       home_country: homeCountry || null,
+      home_lng: home?.lng ?? null,
+      home_lat: home?.lat ?? null,
+      linkedin_location_consent: linkedinConsent,
       languages_spoken: languages,
       share_on_leaderboard: share,
       phone: phone.trim() || null,
@@ -143,10 +239,12 @@ function ProfileForm({ profile }: { profile: Profile }) {
         <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
         Share my scores on the global leaderboard
       </label>
-      <h3>How others find you</h3>
+      <h3>Your details</h3>
       <p className="muted small">
-        Private. Used only to recognise you in other users' contacts, so the history you choose
-        to share reaches the right people. Your login email counts automatically.
+        Private until you hand them over: they go on your card for people you connect with
+        (choose which under My card), and they recognise you in other users' contacts so the
+        history you choose to share reaches the right people. Your login email counts
+        automatically.
       </p>
       <label>
         Phone
@@ -166,6 +264,15 @@ function ProfileForm({ profile }: { profile: Profile }) {
           />
         </label>
       ))}
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={linkedinConsent}
+          onChange={(e) => setLinkedinConsent(e.target.checked)}
+        />
+        Use the location on my LinkedIn profile as my home city when I import my LinkedIn
+        profile
+      </label>
       <button type="submit" disabled={update.isPending}>
         {update.isPending ? 'Saving...' : 'Save'}
       </button>

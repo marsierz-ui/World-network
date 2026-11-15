@@ -7,16 +7,12 @@ import {
   rememberGoogleRefreshToken,
   setGoogleToken,
 } from '../import/googleToken';
+import { APP_URL } from '../../lib/app';
 import { AuthContext, type AuthState } from './authContext';
 
 // Full contacts scope, not contacts.readonly: the import reads the People API,
 // and edits saved here are written back to Google (see googlePush.ts).
 const GOOGLE_SCOPES = 'email profile https://www.googleapis.com/auth/contacts';
-
-// origin alone drops the subpath on GitHub Pages, sending auth redirects to
-// https://marsierz-ui.github.io/ instead of .../World-network/. BASE_URL is
-// '/World-network/' in production and '/' in dev.
-const APP_URL = window.location.origin + import.meta.env.BASE_URL;
 
 /**
  * Both Google tokens exist on exactly one page load: the one that handles the

@@ -5,4 +5,5 @@ export const SOURCE_LABEL: Record<ContactSource, string> = {
   google: 'Google',
   csv: 'CSV',
   linkedin_csv: 'LinkedIn',
+  invite: 'Invite',
 };

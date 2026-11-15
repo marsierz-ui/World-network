@@ -1,5 +1,53 @@
 import { useState } from 'react';
 import { useAuth } from './authContext';
+import { pendingInvite } from '../card/invite';
+import { TrailMark, Wordmark } from '../../components/TrailMark';
+
+// Illustrative cities for the signed-out demo; nothing here is real user data.
+const HOME = { name: 'Berlin', x: 330, y: 84 };
+const CITIES = [
+  { name: 'Lisbon', n: 7, x: 236, y: 150 },
+  { name: 'New York', n: 31, x: 112, y: 122 },
+  { name: 'Singapore', n: 18, x: 462, y: 204 },
+  { name: 'Sydney', n: 6, x: 516, y: 262 },
+];
+
+function DemoMap({ city, onPick }: { city: number; onPick: (i: number) => void }) {
+  const c = CITIES[city];
+  const trail = `M${HOME.x} ${HOME.y} Q ${(HOME.x + c.x) / 2} ${Math.min(HOME.y, c.y) - 46} ${c.x} ${c.y}`;
+  return (
+    <div className="lp-demo">
+      <svg viewBox="0 0 580 300" role="img" aria-label={`Example map: a trail from ${HOME.name} to ${c.name}`}>
+        <g className="lp-grid">
+          {[60, 120, 180, 240].map((y) => <line key={y} x1="0" x2="580" y1={y} y2={y} />)}
+          {[58, 116, 174, 232, 290, 348, 406, 464, 522].map((x) => <line key={x} y1="0" y2="300" x1={x} x2={x} />)}
+        </g>
+        {/* key restarts the draw animation each time another city is picked */}
+        <g key={c.name}>
+          <mask id="lp-trail-mask" maskUnits="userSpaceOnUse">
+            <path className="lp-trail-mask" d={trail} pathLength={1} />
+          </mask>
+          <path className="lp-trail" d={trail} mask="url(#lp-trail-mask)" />
+          <circle className="lp-pulse" cx={c.x} cy={c.y} r="12" />
+        </g>
+        <g className="lp-home">
+          <circle cx={HOME.x} cy={HOME.y} r="9" />
+          <text x={HOME.x} y={HOME.y + 26} textAnchor="middle">{HOME.name}, home</text>
+        </g>
+        {CITIES.map((p, i) => (
+          <g key={p.name} className={i === city ? 'lp-city active' : 'lp-city'} onClick={() => onPick(i)}>
+            <circle cx={p.x} cy={p.y} r={i === city ? 12 : 8} />
+            <text x={p.x} y={p.y + 28} textAnchor="middle">{p.name}</text>
+          </g>
+        ))}
+      </svg>
+      <div className="lp-demo-foot">
+        <span key={c.name} className="lp-demo-count">{c.n} people you know live in {c.name}</span>
+        <span className="lp-demo-tag">Example</span>
+      </div>
+    </div>
+  );
+}
 
 export function LoginPage() {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail } = useAuth();
@@ -8,6 +56,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [city, setCity] = useState(0);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,51 +69,164 @@ export function LoginPage() {
   }
 
   return (
-    <div className="login">
-      <h1>World Network</h1>
-      <p className="muted">Your network, on the map.</p>
-      <p className="muted small">
-        Place your contacts on a world map and keep them in sync with Google Contacts. If you
-        sign in with Google, the app asks to read and update your contacts for that purpose
-        only.
-      </p>
+    <div className="landing">
+      <div className="lp-wrap">
+        <header className="lp-nav">
+          <span className="lp-brand"><TrailMark size={32} /><Wordmark /></span>
+          <a className="lp-link" href="#does">What it does</a>
+          <a className="lp-link" href="#data">Your data</a>
+          <a className="lp-btn" href="#signin">Sign in</a>
+        </header>
 
-      <button className="btn-google" onClick={signInWithGoogle}>
-        Continue with Google
-      </button>
+        <section className="lp-hero">
+          <div className="lp-copy">
+            <h1>Know who you know, wherever you land.</h1>
+            <p>
+              CrowdTrails puts your contacts on a world map. Open it in a new city and it shows
+              who lives there, so you can say hello before you fly home.
+            </p>
+            <div className="lp-pick">
+              <span className="lp-pick-label">Where are you landing?</span>
+              <div className="lp-chips">
+                {CITIES.map((c, i) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    className={i === city ? 'lp-chip active' : 'lp-chip'}
+                    aria-pressed={i === city}
+                    onClick={() => setCity(i)}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DemoMap city={city} onPick={setCity} />
+          </div>
 
-      <div className="divider">or</div>
+          <aside className="lp-sign" id="signin">
+            <h2>{mode === 'in' ? 'Open your map' : 'Create your account'}</h2>
+            {pendingInvite() && (
+              <p className="invite-note">
+                You have been invited to connect. Sign in or create an account to see the invite.
+              </p>
+            )}
+            <button className="btn-google" onClick={signInWithGoogle}>
+              Continue with Google
+            </button>
+            <p className="muted small">
+              With Google, the app asks to read and update your contacts, to place them on the
+              map and keep them in sync. Nothing else.
+            </p>
+            <div className="divider">or</div>
+            <form onSubmit={submit}>
+              <input
+                type="email"
+                placeholder="Email"
+                aria-label="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                aria-label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              {error && <div className="error">{error}</div>}
+              <button type="submit" disabled={busy}>
+                {mode === 'in' ? 'Sign in' : 'Create account'}
+              </button>
+            </form>
+            <button className="link" onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>
+              {mode === 'in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
+            </button>
+          </aside>
+        </section>
 
-      <form onSubmit={submit}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        {error && <div className="error">{error}</div>}
-        <button type="submit" disabled={busy}>
-          {mode === 'in' ? 'Sign in' : 'Create account'}
-        </button>
-      </form>
+        <section className="lp-section" id="does">
+          <span className="lp-eyebrow">What it does</span>
+          <h2>Three moments it is built for</h2>
+          <div className="lp-cards">
+            <div className="lp-card lp-reveal">
+              <span className="lp-card-kicker">On arrival</span>
+              <h3>You arrive. It tells you who is there.</h3>
+              <p>
+                Tick who should hear from you and send one notice. People on CrowdTrails see it
+                in the app. For everyone else it opens your own mail or messaging app.
+              </p>
+            </div>
+            <div className="lp-card lp-reveal">
+              <span className="lp-card-kicker">Google, LinkedIn, CSV</span>
+              <h3>Import once. Stay in sync.</h3>
+              <p>
+                No typing people in. Bring your address book, and edits flow both ways with
+                Google. Duplicates are found and merged with your approval.
+              </p>
+            </div>
+            <div className="lp-card lp-reveal">
+              <span className="lp-card-kicker">In person</span>
+              <h3>Meet someone. Swap cards by QR.</h3>
+              <p>
+                They scan your code and each of you gets the other as a contact. You choose
+                which details your card carries, and you can retire the code at any time.
+              </p>
+            </div>
+          </div>
+        </section>
 
-      <button className="link" onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>
-        {mode === 'in' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
-      </button>
+        <section className="lp-section" id="data">
+          <div className="lp-trust lp-reveal">
+            <span className="lp-eyebrow">Your data</span>
+            <h2>An address book is private. We treat it that way.</h2>
+            <div className="lp-facts">
+              <div className="lp-fact">
+                <strong>A city, never a position</strong>
+                <span>
+                  Your position is matched to a city on your device. Only the city is stored,
+                  with no history, and location is off until you turn it on.
+                </span>
+              </div>
+              <div className="lp-fact">
+                <strong>Your rows only</strong>
+                <span>
+                  Every table sits behind row-level security. A signed-in person reaches their
+                  own contacts and nothing else.
+                </span>
+              </div>
+              <div className="lp-fact">
+                <strong>Nothing is sent for you</strong>
+                <span>
+                  CrowdTrails sends no email or SMS itself. Messages to people outside the app
+                  leave from your own mail or messaging app.
+                </span>
+              </div>
+              <div className="lp-fact">
+                <strong>30 days to change your mind</strong>
+                <span>
+                  Deleting your account starts a 30-day grace period. After it, everything is
+                  removed.
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <p className="muted small">
-        <a href={`${import.meta.env.BASE_URL}privacy.html`}>Privacy Policy</a>
-        {' | '}
-        <a href={`${import.meta.env.BASE_URL}terms.html`}>Terms of Service</a>
-      </p>
+        <section className="lp-section lp-end lp-reveal">
+          <h2>Your address book is already a map. Open it.</h2>
+          <a className="lp-btn big" href="#signin">Put my contacts on the map</a>
+          <span className="muted">Works in the browser and installs on iPhone and Android.</span>
+        </section>
+
+        <footer className="lp-foot">
+          <span>CrowdTrails, an xTrails app</span>
+          <a href={`${import.meta.env.BASE_URL}privacy.html`}>Privacy Policy</a>
+          <a href={`${import.meta.env.BASE_URL}terms.html`}>Terms of Service</a>
+        </footer>
+      </div>
     </div>
   );
 }

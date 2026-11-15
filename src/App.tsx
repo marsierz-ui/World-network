@@ -14,6 +14,8 @@ import { ContactsPage } from './pages/ContactsPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ImportPage } from './pages/ImportPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { VisitsPage } from './pages/VisitsPage';
+import { CardPage } from './pages/CardPage';
 
 function AdminOnly({ children }: { children: ReactNode }) {
   const { isAdmin, loading } = useIsAdmin();
@@ -40,6 +42,8 @@ export function App() {
         <Route path="social" element={<AdminOnly><SocialPage /></AdminOnly>} />
         <Route path="feed" element={<AdminOnly><FeedPage /></AdminOnly>} />
         <Route path="contacts" element={<ContactsPage />} />
+        <Route path="visits" element={<VisitsPage />} />
+        <Route path="card" element={<CardPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="import" element={<ImportPage />} />
         <Route path="settings" element={<SettingsPage />} />

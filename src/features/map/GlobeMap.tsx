@@ -138,7 +138,7 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
             'circle-color': 'rgba(0,0,0,0)',
             'circle-radius': ['get', 'radius'],
             'circle-stroke-width': 2,
-            'circle-stroke-color': '#6366f1',
+            'circle-stroke-color': '#3f5bb8',
           }}
         />
       </Source>
