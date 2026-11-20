@@ -25,22 +25,22 @@ export function AppLayout() {
     <div className="app-shell">
       <nav className="sidebar">
         <div className="brand"><TrailMark /><Wordmark /></div>
-        <NavLink to="/" end>Map</NavLink>
-        <NavLink to="/contacts">Contacts</NavLink>
-        <NavLink to="/visits">
+        <NavLink to="/" end viewTransition>Map</NavLink>
+        <NavLink to="/contacts" viewTransition>Contacts</NavLink>
+        <NavLink to="/visits" viewTransition>
           Visits{unread > 0 && <span className="filter-count nav-count">{unread}</span>}
         </NavLink>
-        <NavLink to="/card">My card</NavLink>
-        <NavLink to="/history">History</NavLink>
-        <NavLink to="/mobility">Mobility</NavLink>
+        <NavLink to="/card" viewTransition>My card</NavLink>
+        <NavLink to="/history" viewTransition>History</NavLink>
+        <NavLink to="/mobility" viewTransition>Mobility</NavLink>
         {isAdmin && (
           <>
-            <NavLink to="/social">Social</NavLink>
-            <NavLink to="/feed">Feed</NavLink>
+            <NavLink to="/social" viewTransition>Social</NavLink>
+            <NavLink to="/feed" viewTransition>Feed</NavLink>
           </>
         )}
-        <NavLink to="/import">Import</NavLink>
-        <NavLink to="/settings">Settings</NavLink>
+        <NavLink to="/import" viewTransition>Import</NavLink>
+        <NavLink to="/settings" viewTransition>Settings</NavLink>
         <div className="spacer" />
         <MoreApps />
         {autoSync.busy && <div className="sync-note">Syncing Google...</div>}

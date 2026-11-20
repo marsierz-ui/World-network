@@ -1,7 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from './authContext';
 import { pendingInvite } from '../card/invite';
 import { TrailMark, Wordmark } from '../../components/TrailMark';
+import { CountUp } from '../../components/CountUp';
+
+// Tilts the hero map toward a mouse pointer; touch input leaves it flat.
+function tilt(e: React.PointerEvent<HTMLDivElement>) {
+  if (e.pointerType !== 'mouse') return;
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width - 0.5;
+  const y = (e.clientY - r.top) / r.height - 0.5;
+  el.style.setProperty('--ry', `${(x * 8).toFixed(2)}deg`);
+  el.style.setProperty('--rx', `${(-y * 6).toFixed(2)}deg`);
+  el.style.setProperty('--lift', '-3px');
+}
+
+function untilt(e: React.PointerEvent<HTMLDivElement>) {
+  for (const p of ['--rx', '--ry', '--lift']) e.currentTarget.style.removeProperty(p);
+}
+
+function spotlight(e: React.PointerEvent<HTMLDivElement>) {
+  const card = (e.target as HTMLElement).closest<HTMLElement>('.lp-card');
+  if (!card) return;
+  const r = card.getBoundingClientRect();
+  card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+  card.style.setProperty('--my', `${e.clientY - r.top}px`);
+}
 
 // Illustrative cities for the signed-out demo; nothing here is real user data.
 const HOME = { name: 'Berlin', x: 330, y: 84 };
@@ -16,7 +41,7 @@ function DemoMap({ city, onPick }: { city: number; onPick: (i: number) => void }
   const c = CITIES[city];
   const trail = `M${HOME.x} ${HOME.y} Q ${(HOME.x + c.x) / 2} ${Math.min(HOME.y, c.y) - 46} ${c.x} ${c.y}`;
   return (
-    <div className="lp-demo">
+    <div className="lp-demo" onPointerMove={tilt} onPointerLeave={untilt}>
       <svg viewBox="0 0 580 300" role="img" aria-label={`Example map: a trail from ${HOME.name} to ${c.name}`}>
         <g className="lp-grid">
           {[60, 120, 180, 240].map((y) => <line key={y} x1="0" x2="580" y1={y} y2={y} />)}
@@ -42,7 +67,9 @@ function DemoMap({ city, onPick }: { city: number; onPick: (i: number) => void }
         ))}
       </svg>
       <div className="lp-demo-foot">
-        <span key={c.name} className="lp-demo-count">{c.n} people you know live in {c.name}</span>
+        <span className="lp-demo-count">
+          <CountUp value={c.n} /> people you know live in <span key={c.name} className="lp-demo-city">{c.name}</span>
+        </span>
         <span className="lp-demo-tag">Example</span>
       </div>
     </div>
@@ -57,6 +84,14 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [city, setCity] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +106,7 @@ export function LoginPage() {
   return (
     <div className="landing">
       <div className="lp-wrap">
-        <header className="lp-nav">
+        <header className={scrolled ? 'lp-nav scrolled' : 'lp-nav'}>
           <span className="lp-brand"><TrailMark size={32} /><Wordmark /></span>
           <a className="lp-link" href="#does">What it does</a>
           <a className="lp-link" href="#data">Your data</a>
@@ -150,7 +185,7 @@ export function LoginPage() {
         <section className="lp-section" id="does">
           <span className="lp-eyebrow">What it does</span>
           <h2>Three moments it is built for</h2>
-          <div className="lp-cards">
+          <div className="lp-cards" onPointerMove={spotlight}>
             <div className="lp-card lp-reveal">
               <span className="lp-card-kicker">On arrival</span>
               <h3>You arrive. It tells you who is there.</h3>
