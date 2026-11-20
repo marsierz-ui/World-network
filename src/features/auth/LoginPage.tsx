@@ -3,6 +3,7 @@ import { useAuth } from './authContext';
 import { pendingInvite } from '../card/invite';
 import { TrailMark, Wordmark } from '../../components/TrailMark';
 import { CountUp } from '../../components/CountUp';
+import { FootstepTrail } from '../../components/FootstepTrail';
 
 // Tilts the hero map toward a mouse pointer; touch input leaves it flat.
 function tilt(e: React.PointerEvent<HTMLDivElement>) {
@@ -105,6 +106,7 @@ export function LoginPage() {
 
   return (
     <div className="landing">
+      <FootstepTrail />
       <div className="lp-wrap">
         <header className={scrolled ? 'lp-nav scrolled' : 'lp-nav'}>
           <span className="lp-brand"><TrailMark size={32} /><Wordmark /></span>

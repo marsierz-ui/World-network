@@ -820,6 +820,8 @@ input, select { border-radius: 6px; }
 }
 .landing::after { background: radial-gradient(circle 420px at 62% 340px, var(--glow), transparent 70%); }
 .lp-wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+/* Behind the content, above the dot grid; prints show in the gaps between cards. */
+.footsteps { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
 .lp-nav {
   position: sticky; top: 12px; z-index: 20; display: flex; align-items: center; gap: 12px;
   margin: 12px 0; padding: 8px 8px 8px 16px; border-radius: 999px; border: 1px solid transparent;
