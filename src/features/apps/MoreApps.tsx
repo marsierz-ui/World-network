@@ -1,11 +1,11 @@
-// The five xTrails apps, same account. An app without a public URL yet is a
-// plain dot, not a link.
+// The xTrails apps, same account. An app without a web address yet (BrainTrails
+// is a browser extension) is a plain dot, not a link.
 const APPS = [
   { name: 'CrowdTrails', color: '#3F5BB8', url: null, current: true },
-  { name: 'PicTrails', color: '#A73B15', url: null },
+  { name: 'PicTrails', color: '#A73B15', url: 'https://pic.xtrails.net/' },
   { name: 'BrainTrails', color: '#894095', url: null },
-  { name: 'SpendingTrails', color: '#007A3A', url: null },
-  { name: 'StockTrails', color: '#007598', url: 'https://marsierz-ui.github.io/attention-tracker/' },
+  { name: 'SpendingTrails', color: '#007A3A', url: 'https://spending.xtrails.net/' },
+  { name: 'StockTrails', color: '#007598', url: 'https://stock.xtrails.net/' },
 ] as const;
 
 export function MoreApps() {
