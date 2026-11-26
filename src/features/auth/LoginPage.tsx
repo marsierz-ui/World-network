@@ -4,6 +4,8 @@ import { pendingInvite } from '../card/invite';
 import { TrailMark, Wordmark } from '../../components/TrailMark';
 import { CountUp } from '../../components/CountUp';
 import { FootstepTrail } from '../../components/FootstepTrail';
+import { CountryBall } from '../countryball/CountryBall';
+import type { BallLook } from '../countryball/look';
 
 // Tilts the hero map toward a mouse pointer; touch input leaves it flat.
 function tilt(e: React.PointerEvent<HTMLDivElement>) {
@@ -32,11 +34,37 @@ function spotlight(e: React.PointerEvent<HTMLDivElement>) {
 // Illustrative cities for the signed-out demo; nothing here is real user data.
 const HOME = { name: 'Berlin', x: 330, y: 84 };
 const CITIES = [
-  { name: 'Lisbon', n: 7, x: 236, y: 150 },
-  { name: 'New York', n: 31, x: 112, y: 122 },
-  { name: 'Singapore', n: 18, x: 462, y: 204 },
-  { name: 'Sydney', n: 6, x: 516, y: 262 },
+  { name: 'Lisbon', n: 7, x: 236, y: 150, flags: ['PT', 'BR', 'ES'] },
+  { name: 'New York', n: 31, x: 112, y: 122, flags: ['US', 'IE', 'IN'] },
+  { name: 'Singapore', n: 18, x: 462, y: 204, flags: ['SG', 'MY', 'CN'] },
+  { name: 'Sydney', n: 6, x: 516, y: 262, flags: ['AU', 'NZ', 'GB'] },
 ];
+
+// Example looks for the demo only.
+const ME_LOOK: BallLook = { hair: 'spiky', hairColor: '#2a1b12', eyes: 'happy', glasses: 'round', hat: 'none', country: null };
+const CROWD: { country: string; look: BallLook }[] = [
+  { country: 'PL', look: { hair: 'bob', hairColor: '#e0b04a', eyes: 'classic', glasses: 'none', hat: 'flower', country: null } },
+  { country: 'JP', look: { hair: 'none', hairColor: '#2a1b12', eyes: 'stern', glasses: 'shades', hat: 'cap', country: null } },
+  { country: 'BR', look: { hair: 'curly', hairColor: '#6b3f1f', eyes: 'happy', glasses: 'none', hat: 'headphones', country: null } },
+  { country: 'FR', look: { hair: 'mohawk', hairColor: '#ff48b0', eyes: 'wink', glasses: 'none', hat: 'none', country: null } },
+  { country: 'GB', look: { hair: 'none', hairColor: '#9aa0a6', eyes: 'sleepy', glasses: 'monocle', hat: 'tophat', country: null } },
+];
+
+// A group of up to three countryballs (two behind, one in front) with a count badge.
+function DemoGroup({ x, y, flags, n }: { x: number; y: number; flags: string[]; n: number }) {
+  return (
+    <g className="lp-group">
+      <CountryBall country={flags[1]} size={28} x={x - 25} y={y - 25} />
+      <CountryBall country={flags[2]} size={28} x={x - 3} y={y - 25} />
+      <CountryBall country={flags[0]} size={34} x={x - 17} y={y - 20} />
+      <g className="lp-badge">
+        <circle className="s" cx={x + 19} cy={y - 15} r={10} />
+        <circle className="b" cx={x + 17.5} cy={y - 16.5} r={10} />
+        <text x={x + 17.5} y={y - 12} textAnchor="middle">{n}</text>
+      </g>
+    </g>
+  );
+}
 
 function DemoMap({ city, onPick }: { city: number; onPick: (i: number) => void }) {
   const c = CITIES[city];
@@ -57,12 +85,13 @@ function DemoMap({ city, onPick }: { city: number; onPick: (i: number) => void }
           <circle className="lp-pulse" cx={c.x} cy={c.y} r="12" />
         </g>
         <g className="lp-home">
-          <circle cx={HOME.x} cy={HOME.y} r="9" />
-          <text x={HOME.x} y={HOME.y + 26} textAnchor="middle">{HOME.name}, home</text>
+          <CountryBall country="DE" look={ME_LOOK} size={40} x={HOME.x - 20} y={HOME.y - 28} />
+          <text x={HOME.x} y={HOME.y + 26} textAnchor="middle">You, {HOME.name}</text>
         </g>
         {CITIES.map((p, i) => (
           <g key={p.name} className={i === city ? 'lp-city active' : 'lp-city'} onClick={() => onPick(i)}>
-            <circle cx={p.x} cy={p.y} r={i === city ? 12 : 8} />
+            <circle className="lp-hit" cx={p.x} cy={p.y - 6} r={24} />
+            <DemoGroup x={p.x} y={p.y} flags={p.flags} n={p.n} />
             <text x={p.x} y={p.y + 28} textAnchor="middle">{p.name}</text>
           </g>
         ))}
@@ -106,9 +135,9 @@ export function LoginPage() {
 
   return (
     <div className="landing">
-      <FootstepTrail />
+      <FootstepTrail special="sneaker" />
       <div className="lp-wrap">
-        <header className={scrolled ? 'lp-nav scrolled' : 'lp-nav'}>
+        <header className={scrolled ? 'lp-nav scrolled lg' : 'lp-nav'}>
           <span className="lp-brand"><TrailMark size={32} /><Wordmark /></span>
           <a className="lp-link" href="#does">What it does</a>
           <a className="lp-link" href="#data">Your data</a>
@@ -122,6 +151,11 @@ export function LoginPage() {
               CrowdTrails puts your contacts on a world map. Open it in a new city and it shows
               who lives there, so you can say hello before you fly home.
             </p>
+            <div className="lp-crowd" aria-hidden="true">
+              {CROWD.map((b) => (
+                <CountryBall key={b.country} country={b.country} look={b.look} size={52} />
+              ))}
+            </div>
             <div className="lp-pick">
               <span className="lp-pick-label">Where are you landing?</span>
               <div className="lp-chips">

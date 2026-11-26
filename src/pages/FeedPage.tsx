@@ -89,7 +89,7 @@ export function FeedPage() {
         )}
       </MapGL>
 
-      <div className="map-overlay-left">
+      <div className="map-overlay-left lg lg-thick">
         <strong>Feed</strong>
         <div className="muted feed-stat">
           {connectedCount} connected · {pins.length} on map{unplaced > 0 && ` · ${unplaced} without location`}

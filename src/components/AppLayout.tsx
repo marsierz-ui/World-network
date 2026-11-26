@@ -23,7 +23,7 @@ export function AppLayout() {
   const unread = (useVisitNotices().data ?? []).filter((n) => !n.read_at).length;
   return (
     <div className="app-shell">
-      <nav className="sidebar">
+      <nav className="sidebar lg-tabbar">
         <div className="brand"><TrailMark /><Wordmark /></div>
         <NavLink to="/" end viewTransition>Map</NavLink>
         <NavLink to="/contacts" viewTransition>Contacts</NavLink>

@@ -10,6 +10,7 @@ import { useProfile, useUpdateProfile } from '../features/profile/useProfile';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import { PLATFORMS } from '../lib/socials';
 import type { CardField, Profile } from '../lib/database.types';
+import { BallCustomizer } from '../features/countryball/BallCustomizer';
 
 export function CardPage() {
   const { data: profile } = useProfile();
@@ -17,6 +18,14 @@ export function CardPage() {
   return (
     <div className="page-pad import-page">
       <h2>My card</h2>
+      <section className="import-card" id="countryball">
+        <h3>Your countryball</h3>
+        <p className="muted">
+          How you appear on the maps of people you connect with. Everyone who has not made one is a
+          plain flag ball.
+        </p>
+        <BallCustomizer />
+      </section>
       <ShareCard profile={profile} />
       <CardContents profile={profile} />
       <LinkedMembers />

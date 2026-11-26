@@ -179,16 +179,18 @@ changed. The Google card on the Import page stays a one-way pull.
 
 ### Country outlines (choropleth view)
 
-`public/countries.min.json` (160KB, committed) holds Natural Earth 1:110m country outlines keyed by
-ISO alpha-2, which is what the **Countries** map view shades. Regenerate with:
+`public/countries.min.json` (~1.1MB, ~400KB gzipped, committed) holds Natural Earth 1:10m country
+outlines keyed by ISO alpha-2, which is what the **Countries** map view shades. They are simplified
+with mapshaper so shared borders stay identical for both neighbours (no gaps or overlaps), keeping
+12% of the vertices at ~100m precision. Regenerate with (needs network, fetches mapshaper via npx):
 
 ```bash
 node scripts/build-countries.mjs
 ```
 
-At 1:110m the microstates have no polygon at all (Singapore, Hong Kong, Malta, Bahrain, Andorra);
-those are drawn as a marker on the country centroid in the same colour, because a map of where
-people are cannot silently drop Singapore. The file is fetched only when that view is first opened.
+Microstates (Singapore, Hong Kong, Malta, Bahrain, Andorra, ...) have a polygon but are invisible
+at world zoom, so the build flags them `tiny` and the map also draws a marker on the country
+centroid in the same colour, because a map of where people are cannot silently drop Singapore. The file is fetched only when that view is first opened.
 
 ### Flag colours
 

@@ -35,7 +35,7 @@ export function VisitBanner() {
   }
 
   return (
-    <div className="visit-banner" role="status">
+    <div className="visit-banner lg lg-thick" role="status">
       <span>
         You are in <strong>{place.city}</strong>. You know{' '}
         {people.inCity.length > 0 && <>{people.inCity.length} here</>}

@@ -1,35 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Map, useControl, type MapRef } from 'react-map-gl/maplibre';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { IconLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers';
+import { Map, Marker, type MapRef } from 'react-map-gl/maplibre';
 import type { MapPoint } from './useMapData';
-import { flagImageUrl } from './mapIcons';
-import { groupingForZoom, useMapStore } from './mapStore';
-import { useBasemap, useMarkerOutline } from '../../lib/basemap';
+import { CITY_ZOOM, groupingForZoom, useMapStore } from './mapStore';
+import { useBasemap } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
-import { useTheme } from '../../lib/theme';
+import { BallStack } from '../countryball/BallStack';
+import { ballCountry, contactLocalFlag, type Ball } from '../countryball/faces';
+import type { BallLook } from '../countryball/look';
+import type { Map as MaplibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-// Native pixel size baked into public/flags/<code>.svg - see build-flag-svgs.mjs.
-const FLAG_IMAGE_SIZE = 128;
-
-// Flat discs instead of the old 30px teardrop pins: a pin's tail and solid fill
-// cover a lot of basemap, and at city scale several of them overlap into a blob.
-// Radius grows with the stack so density still reads at a glance.
-function radiusFor(p: MapPoint) {
-  return p.count === 1 ? 6 : 8 + Math.sqrt(p.count) * 3.2;
-}
+// Countryballs instead of dots. One person is one ball; several people at one
+// place stack into a group of up to three balls with a count badge. Zoomed far
+// in (a single city fills the screen) the group opens into a ring so everyone
+// is visible again.
+export const SPREAD_ZOOM = 9;
 
 // City when the dots are per city, country name when they are per country.
 function placeLabel(p: MapPoint) {
   return p.city ?? COUNTRY_BY_CODE.get(p.country ?? '')?.name ?? null;
 }
 
-function DeckOverlay(props: ConstructorParameters<typeof MapboxOverlay>[0]) {
-  const overlay = useControl(() => new MapboxOverlay(props));
-  overlay.setProps(props);
-  return null;
+export interface MeOnMap {
+  lng: number;
+  lat: number;
+  country: string | null;
+  look: BallLook | null;
 }
+
+/** The member's home: country, and where in it if known. */
+export interface HomeArea {
+  country: string;
+  lng: number | null;
+  lat: number | null;
+}
+
+// Clouds start this long apart, west to east, so they fill in like a wave.
+const CLOUD_STEP = 70;
+const CLOUD_MAX = 1400;
 
 interface Props {
   points: MapPoint[];
@@ -37,13 +45,20 @@ interface Props {
   focus: { lng: number; lat: number; zoom: number } | null;
   selected: MapPoint | null;
   onSelect: (p: MapPoint | null) => void;
+  /** Looks of linked members by contact id; everyone else is a plain ball. */
+  looks?: globalThis.Map<string, BallLook>;
+  /** The signed-in member's own ball, where they are. */
+  me?: MeOnMap | null;
+  /** The member's home. Not used for the clouds any more (they show everywhere at city zoom); kept for callers. */
+  home?: HomeArea | null;
 }
 
-export function NetworkMap({ points, initialView, focus, selected, onSelect }: Props) {
+export function NetworkMap({ points, initialView, focus, selected, onSelect, looks, me }: Props) {
   const [hovered, setHovered] = useState<MapPoint | null>(null);
+  const [spread, setSpread] = useState(initialView.zoom >= SPREAD_ZOOM);
+  // City zoom: balls keep their national flag and grow a cloud with the regional or city flag.
+  const [detail, setDetail] = useState(initialView.zoom >= CITY_ZOOM);
   const basemap = useBasemap();
-  const outline = useMarkerOutline();
-  const theme = useTheme((s) => s.theme);
   const setGrouping = useMapStore((s) => s.setGrouping);
   const mapRef = useRef<MapRef | null>(null);
 
@@ -51,110 +66,84 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect }: P
     if (focus) mapRef.current?.getMap().flyTo({ center: [focus.lng, focus.lat], zoom: focus.zoom });
   }, [focus]);
 
-  const stacks = useMemo(() => points.filter((p) => p.count > 1), [points]);
-  const selectedRing = useMemo(() => (selected ? [selected] : []), [selected]);
-  // The actual flag image sits on top of the base circle once it has loaded;
-  // deck.gl's IconLayer fetches and caches each one by country code itself,
-  // unlike maplibre it needs no manual addImage bookkeeping (see GlobeMap).
-  const flagged = useMemo(() => points.filter((p) => p.flagCode), [points]);
+  const balls = useMemo(() => {
+    // Rank places west to east for the cloud wave.
+    const rank = new globalThis.Map(
+      points.map((p, i) => [i, p.lng] as const).sort((a, b) => a[1] - b[1]).map(([i], r) => [i, r] as const),
+    );
+    return points.map((p, i): Ball[] =>
+      p.contacts.map((c) => {
+        const look = looks?.get(c.id) ?? null;
+        // A member's own choice (none / region / city) wins over where the address puts them.
+        const own = look?.local ? (look.local === 'none' ? null : look.localFlag ?? null) : undefined;
+        const local = detail ? (own !== undefined ? own : contactLocalFlag(c)) : null;
+        const cloudDelay = Math.min((rank.get(i) ?? 0) * CLOUD_STEP, CLOUD_MAX);
+        return { key: c.id, country: ballCountry(c, p.country), look, name: c.full_name, local, cloudDelay };
+      }),
+    );
+  }, [points, looks, detail]);
 
-  const layers = useMemo(
-    () => [
-      new ScatterplotLayer<MapPoint>({
-        id: 'contacts',
-        data: points,
-        pickable: true,
-        stroked: true,
-        filled: true,
-        radiusUnits: 'pixels',
-        lineWidthUnits: 'pixels',
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: radiusFor,
-        // Translucent so overlapping points and the basemap both stay readable.
-        // Flag fills go nearly opaque: at the translucency that keeps category
-        // dots from hiding the basemap, a flag's colours wash out into pastels
-        // and stop being recognisable as that flag. This is only ever the
-        // placeholder shown before the real flag image below has loaded.
-        getFillColor: (d) => [...d.color, d.flagCode ? 235 : 170] as [number, number, number, number],
-        // A plain contrast edge, the same whether or not the dot is flag
-        // coloured: the flag no longer lives in the stroke, so it never has to
-        // compete with it.
-        getLineColor: outline,
-        getLineWidth: 1.5,
-        radiusMinPixels: 4,
-        radiusMaxPixels: 28,
-        autoHighlight: true,
-        highlightColor: [255, 255, 255, 90],
-        onClick: (info) => onSelect((info.object as MapPoint) ?? null),
-        onHover: (info) => setHovered((info.object as MapPoint) ?? null),
-        updateTriggers: { getLineColor: [theme, points], getFillColor: points },
-      }),
-      // The actual flag (public/flags/<code>.svg, pre-cropped to a circle) as
-      // the whole dot's background, sized to exactly cover the circle above
-      // so no placeholder colour shows past its transparent corners.
-      new IconLayer<MapPoint>({
-        id: 'contacts-flags',
-        data: flagged,
-        pickable: false,
-        sizeUnits: 'pixels',
-        getPosition: (d) => [d.lng, d.lat],
-        getIcon: (d) => ({
-          url: flagImageUrl(d.flagCode!),
-          id: d.flagCode!,
-          width: FLAG_IMAGE_SIZE,
-          height: FLAG_IMAGE_SIZE,
-        }),
-        getSize: (d) => radiusFor(d) * 2,
-        updateTriggers: { getIcon: flagged, getSize: flagged },
-      }),
-      // Ring marking the open point, so the card and the map agree.
-      new ScatterplotLayer<MapPoint>({
-        id: 'selection',
-        data: selectedRing,
-        pickable: false,
-        stroked: true,
-        filled: false,
-        radiusUnits: 'pixels',
-        lineWidthUnits: 'pixels',
-        getPosition: (d) => [d.lng, d.lat],
-        getRadius: (d) => radiusFor(d) + 5,
-        getLineColor: [99, 102, 241, 255],
-        getLineWidth: 2,
-      }),
-      new TextLayer<MapPoint>({
-        id: 'counts',
-        data: stacks,
-        getPosition: (d) => [d.lng, d.lat],
-        getText: (d) => String(d.count),
-        getSize: 11,
-        getColor: [255, 255, 255, 255],
-        outlineColor: [0, 0, 0, 180],
-        outlineWidth: 2,
-        fontSettings: { sdf: true },
-        getTextAnchor: 'middle',
-        getAlignmentBaseline: 'center',
-      }),
-    ],
-    [points, stacks, selectedRing, flagged, onSelect, outline, theme],
-  );
+  function onView(map: MaplibreMap) {
+    // Only thresholds are stored, so panning inside one band re-renders nothing.
+    const zoom = map.getZoom();
+    setGrouping(groupingForZoom(zoom));
+    setSpread(zoom >= SPREAD_ZOOM);
+    setDetail(zoom >= CITY_ZOOM);
+  }
 
   return (
     <Map
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}
-      // Only the country/city threshold is stored, so panning inside one zoom
-      // band writes the same value and nothing regroups.
-      onLoad={(e) => setGrouping(groupingForZoom(e.target.getZoom()))}
-      onMove={(e) => setGrouping(groupingForZoom(e.viewState.zoom))}
+      onLoad={(e) => onView(e.target)}
+      onMove={(e) => onView(e.target)}
       style={{ position: 'absolute', inset: 0 }}
     >
-      <DeckOverlay
-        layers={layers}
-        getCursor={({ isHovering }) => (isHovering ? 'pointer' : 'grab')}
-      />
+      {points.map((p, i) => {
+        const isSel = !!selected && selected.contacts[0]?.id === p.contacts[0]?.id;
+        return (
+          <Marker
+            key={`${p.contacts[0]?.id ?? i}-${p.count}`}
+            longitude={p.lng}
+            latitude={p.lat}
+            anchor="center"
+            style={{ zIndex: isSel ? 3 : p.count > 1 ? 2 : 1 }}
+            onClick={(e) => {
+              e.originalEvent.stopPropagation();
+              onSelect(p);
+            }}
+          >
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={`${p.count === 1 ? p.contacts[0].full_name : `${p.count} contacts`}${placeLabel(p) ? `, ${placeLabel(p)}` : ''}`}
+              onMouseEnter={() => setHovered(p)}
+              onMouseLeave={() => setHovered((h) => (h === p ? null : h))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(p);
+                }
+              }}
+            >
+              <BallStack balls={balls[i]} count={p.count} spread={spread} selected={isSel} />
+            </div>
+          </Marker>
+        );
+      })}
+      {me && (
+        <Marker longitude={me.lng} latitude={me.lat} anchor="center" style={{ zIndex: 4 }}>
+          <BallStack
+            balls={[{ key: 'me', country: me.country, look: me.look, local: detail && me.look?.local && me.look.local !== 'none' ? me.look.localFlag ?? null : null }]}
+            count={1}
+            spread={false}
+            label="You"
+          />
+        </Marker>
+      )}
       {hovered && (
-        <div className="map-hover">
+        <div className="map-hover lg lg-thick">
           {hovered.count === 1 ? (
             <>
               <span className={`dot ${hovered.contacts[0].category}`} />

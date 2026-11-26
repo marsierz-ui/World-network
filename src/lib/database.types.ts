@@ -34,6 +34,8 @@ export interface Profile {
   current_country: string | null;
   current_lng: number | null;
   current_lat: number | null;
+  /** Countryball look (see features/countryball/look.ts). Absent until the 20261122120000 migration. */
+  avatar?: unknown;
   location_updated_at: string | null;
   linkedin_location_consent: boolean;
   created_at: string;
