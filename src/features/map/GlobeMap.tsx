@@ -3,7 +3,7 @@ import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-
 import type { MapPoint } from './useMapData';
 import { flagImageUrl } from './mapIcons';
 import { groupingForZoom, useMapStore } from './mapStore';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -115,6 +115,7 @@ export function GlobeMap({ points, initialView, focus, selected, onSelect }: Pro
 
   return (
     <Map
+      canvasContextAttributes={MAP_CANVAS_CONTEXT}
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={BASEMAP}

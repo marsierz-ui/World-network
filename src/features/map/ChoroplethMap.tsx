@@ -3,7 +3,7 @@ import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-
 import type { ExpressionSpecification } from 'maplibre-gl';
 import type { MapPoint } from './useMapData';
 import { useCountryShapes } from './countryShapes';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -153,6 +153,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
 
   return (
     <Map
+      canvasContextAttributes={MAP_CANVAS_CONTEXT}
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}

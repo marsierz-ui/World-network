@@ -1290,3 +1290,20 @@ html.lg-refract .visit-banner.lg, html.lg-refract .lp-nav.scrolled.lg {
 @media (prefers-reduced-motion: reduce) {
   .cb-cloud-bubbles circle, .cb-cloud-body { animation: none !important; }
 }
+
+/* ---- feedback screenshot ---- */
+.fbk-box { display: flex; flex-direction: column; gap: 8px; }
+.fbk-box textarea { width: 100%; }
+/* A tall page is shown scaled to the box width and scrolls inside it. */
+.fbk-shot { display: block; max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+.fbk-shot img { display: block; width: 100%; height: auto; }
+.fbk-shot-admin { max-width: 360px; max-height: 200px; margin: 6px 0; }
+.fbk-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fbk-chk { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+.fbk-chk input { width: auto; flex: none; }
+.fbk-note { margin: 0; font-size: 0.85em; }
+.fbk-toast {
+  position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 60;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 16px; box-shadow: var(--shadow-float);
+}

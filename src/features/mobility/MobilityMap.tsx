@@ -4,7 +4,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { ScatterplotLayer, ArcLayer, TextLayer } from '@deck.gl/layers';
 import type { Contact } from '../../lib/database.types';
 import { CATEGORY_RGB } from '../map/mapIcons';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import type { Frame } from './mobilityData';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -68,7 +68,7 @@ export function MobilityMap({ frame, showLabels, initialView, onSelect }: Props)
   );
 
   return (
-    <Map initialViewState={initialView} mapStyle={BASEMAP} style={{ position: 'absolute', inset: 0 }}>
+    <Map canvasContextAttributes={MAP_CANVAS_CONTEXT} initialViewState={initialView} mapStyle={BASEMAP} style={{ position: 'absolute', inset: 0 }}>
       <DeckOverlay layers={layers} />
     </Map>
   );

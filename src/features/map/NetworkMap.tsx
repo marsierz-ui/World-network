@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Map, Marker, type MapRef } from 'react-map-gl/maplibre';
 import type { MapPoint } from './useMapData';
 import { CITY_ZOOM, groupingForZoom, useMapStore } from './mapStore';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { BallStack } from '../countryball/BallStack';
 import { ballCountry, contactLocalFlag, type Ball } from '../countryball/faces';
@@ -93,6 +93,7 @@ export function NetworkMap({ points, initialView, focus, selected, onSelect, loo
 
   return (
     <Map
+      canvasContextAttributes={MAP_CANVAS_CONTEXT}
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}

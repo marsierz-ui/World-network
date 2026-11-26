@@ -256,6 +256,7 @@ export interface Feedback {
   sender_email: string | null;
   text: string;
   page: string | null;
+  screenshot_path?: string | null;
   status: FeedbackStatus;
   created_at: string;
 }

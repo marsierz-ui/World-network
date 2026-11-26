@@ -17,3 +17,7 @@ const OUTLINE_DARK: [number, number, number, number] = [10, 12, 16, 200];
 export function useMarkerOutline(): [number, number, number, number] {
   return useTheme((s) => (s.theme === 'light' ? OUTLINE_LIGHT : OUTLINE_DARK));
 }
+
+// Keeps the last WebGL frame readable so the feedback screenshot can copy the
+// map; without it the map canvas reads back blank. Costs a little GPU memory.
+export const MAP_CANVAS_CONTEXT = { preserveDrawingBuffer: true } as const;
