@@ -7,8 +7,11 @@ import from Google and CSV (incl. LinkedIn exports), tag communities, and switch
 **Live: https://marsierz-ui.github.io/World-network/** - always on, installable on a phone
 (Share -> Add to Home Screen on iOS, Install app on Android).
 
-This is Phase 1 (map + contacts foundation). Mobility-over-time, stats/gamification, and the
-social mode are planned for later phases.
+Members can also connect with each other: share a card by QR code or invite link, see who they
+know in the city they are visiting, and let those people know (see
+[Cards, visits and location](#cards-visits-and-location)).
+
+Stats/gamification and the social mode are planned for later phases.
 
 ## Stack
 
@@ -176,16 +179,18 @@ changed. The Google card on the Import page stays a one-way pull.
 
 ### Country outlines (choropleth view)
 
-`public/countries.min.json` (160KB, committed) holds Natural Earth 1:110m country outlines keyed by
-ISO alpha-2, which is what the **Countries** map view shades. Regenerate with:
+`public/countries.min.json` (~1.1MB, ~400KB gzipped, committed) holds Natural Earth 1:10m country
+outlines keyed by ISO alpha-2, which is what the **Countries** map view shades. They are simplified
+with mapshaper so shared borders stay identical for both neighbours (no gaps or overlaps), keeping
+12% of the vertices at ~100m precision. Regenerate with (needs network, fetches mapshaper via npx):
 
 ```bash
 node scripts/build-countries.mjs
 ```
 
-At 1:110m the microstates have no polygon at all (Singapore, Hong Kong, Malta, Bahrain, Andorra);
-those are drawn as a marker on the country centroid in the same colour, because a map of where
-people are cannot silently drop Singapore. The file is fetched only when that view is first opened.
+Microstates (Singapore, Hong Kong, Malta, Bahrain, Andorra, ...) have a polygon but are invisible
+at world zoom, so the build flags them `tiny` and the map also draws a marker on the country
+centroid in the same colour, because a map of where people are cannot silently drop Singapore. The file is fetched only when that view is first opened.
 
 ### Flag colours
 
@@ -258,11 +263,85 @@ npx tsc -b --noEmit  # typecheck
 - History: durable log of every contact added or removed, grouped by day, filterable by
   action and searchable by name / email / place
 
+## Cards, visits and location
+
+Apply `20261114115900_invite_source.sql` and `20261114120000_cards_visits_community.sql`.
+
+- **My card** (`/card`). Every profile has a `share_token`; the QR code and the invite link
+  (`<site>?invite=<token>`) carry it. Opening the link signed out parks the token in
+  localStorage across the sign-in, then asks. Accepting calls `accept_invite()`, which swaps
+  cards: each side gets the other as a contact (an existing contact with the same email or phone
+  is adopted, and only its empty fields are filled) and a `contact_links` row. The card holds the
+  name plus whichever of phone / emails / socials / home city are ticked in `share_fields`.
+  "Replace link" writes a new token, which retires the old link and QR code.
+- **`contact_links` is not client-writable.** Only the security-definer functions insert into
+  it. A client that could write it could claim a link to any member, then read their city and
+  send them notices. Deleting a row (Disconnect, or deleting the contact) removes the other
+  member's row too.
+- **City location** (Settings, off by default). The browser's position is read at low accuracy
+  and matched to a city in the browser (`nearestCity()` in `src/lib/geocode.ts`: the biggest city
+  within 20 km, else the closest within 100 km). Only that city and the city's own coordinates
+  are written to `profiles.current_*`. The position itself never leaves the device, and there is
+  no history: one row, overwritten. Switching it off nulls the columns. Linked members read it
+  through `linked_locations()`.
+- **Visits** (`/visits`). Away from home (more than 75 km from the stored home coordinates) the
+  app shows a banner with how many contacts live in that city and country. The page lists them,
+  for the detected city or any city picked by hand, and one button notifies the ticked ones:
+  linked members get a row in `visit_notices` through `send_visit_notice()` (which reaches linked
+  members only, 200 a day at most) and see it on their own Visits page; everyone else is
+  messaged by the user, through one Bcc email from their mail app or the WhatsApp / SMS link on
+  each row. The app sends no email or SMS itself, so there is no provider to pay and nobody can
+  use it to spam.
+- **Not covered:** an alert while the app is closed. A web app cannot read location in the
+  background, so the check runs when the app is opened.
+
+## One account for several apps
+
+The Supabase project is the shared part. Any other app (photomap, consumption, language
+assistant, ...) that is built against the same project gets the same sign-in and the same
+`profiles` row, with nothing to migrate. To keep that working:
+
+- Keep app-neutral things in the tables every app reads: `profiles` (identity, home, card,
+  location), `contact_links`, `apps`, `feedback`. Prefix a new app's own tables with its name.
+- `public.apps` is the directory. Each app shows the other rows under "More apps, same account"
+  (`src/features/apps/MoreApps.tsx`), so launching an app advertises it in all the others with
+  one SQL insert and no deploy.
+- `public.feedback` has an `app` column. The Feedback button in every app writes to the same
+  table, and the inbox on the Settings page (admins only) shows all of it.
+- Add each app's URL to Authentication -> URL Configuration -> Redirect URLs, and to the
+  `ALLOWED_ORIGINS` secret.
+- Sessions are stored per origin, so a second app on another domain asks to sign in once
+  ("Continue with Google" is one click). Hosting the apps as subdomains of one domain keeps the
+  option of a shared session cookie open later.
+
 ## Deployment
 
+### Railway
+
+`Dockerfile` builds the site and serves `dist` with Caddy (`Caddyfile`: SPA fallback, long cache
+for `/assets`, no cache for the shell and the service worker). `railway.json` points Railway at it.
+
+1. New project -> Deploy from GitHub repo -> this repository.
+2. Service -> Variables: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (same values as
+   `.env.local`). They are build-time values; redeploy after changing them.
+3. Service -> Settings -> Networking -> Generate Domain.
+4. In Supabase: Authentication -> URL Configuration, add the Railway URL to Redirect URLs (and
+   make it the Site URL once it is the main address). Without this, sign-in lands on the old site.
+5. `supabase secrets set ALLOWED_ORIGINS=https://<railway-domain>,https://marsierz-ui.github.io`
+   so the Edge Functions answer the new origin.
+
+To try the image locally:
+
+```bash
+docker build -t world-network --build-arg VITE_SUPABASE_URL=... --build-arg VITE_SUPABASE_ANON_KEY=... .
+docker run --rm -p 8080:8080 world-network
+```
+
+### GitHub Pages
+
 Pushing to `main` builds and publishes to GitHub Pages via `.github/workflows/deploy.yml`.
-The site is served from `/World-network/`, so `vite.config.ts` sets that as the production
-`base` while dev stays on `/`; runtime paths use `import.meta.env.BASE_URL`.
+The site is served from `/World-network/` there, so the workflow sets `VITE_BASE_PATH` to that;
+every other build, and dev, is served from `/`. Runtime paths use `import.meta.env.BASE_URL`.
 
 Two details worth knowing before changing the pipeline:
 

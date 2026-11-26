@@ -62,7 +62,7 @@ export function MobilityPage() {
         onSelect={setSelected}
       />
 
-      <div className="mobility-panel">
+      <div className="mobility-panel lg lg-thick">
         {history.length === 0 && (
           <div className="mob-hint">
             No movement data yet. <Link to="/import">Import your LinkedIn profile and job history</Link>{' '}
@@ -104,7 +104,7 @@ export function MobilityPage() {
       </div>
 
       {selected && (
-        <aside className="point-card">
+        <aside className="point-card lg lg-thick">
           <div className="point-card-head">
             <strong>{selected.full_name}</strong>
             <button className="x" onClick={() => setSelected(null)}>x</button>

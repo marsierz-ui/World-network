@@ -13,6 +13,10 @@ import { MapSearch } from '../features/map/MapSearch';
 import { COUNTRY_BY_CODE } from '../lib/countries';
 import { SocialLinks } from '../features/contacts/SocialLinks';
 import type { Contact, Tag } from '../lib/database.types';
+import { BallSetup } from '../features/countryball/BallSetup';
+import { useLinkedLooks, useMyBallLook } from '../features/countryball/useBallLook';
+import { CountryBall } from '../features/countryball/CountryBall';
+import { ballCountry } from '../features/countryball/faces';
 
 type MapKind = 'flat' | 'globe' | 'countries';
 
@@ -45,6 +49,20 @@ export function MapPage() {
     (categories.size > 0 ? 1 : 0) + (countries.size > 0 ? 1 : 0) + (tagId ? 1 : 0);
 
   const homeCountry = profile?.home_country ?? null;
+  const { data: looks } = useLinkedLooks();
+  const { look: myLook, country: myCountry } = useMyBallLook();
+  // The member's own ball: where they are now if they share it, else home.
+  const me = useMemo(() => {
+    if (!profile) return null;
+    const lng = profile.location_enabled && profile.current_lng != null ? profile.current_lng : profile.home_lng;
+    const lat = profile.location_enabled && profile.current_lat != null ? profile.current_lat : profile.home_lat;
+    return lng != null && lat != null ? { lng, lat, country: myCountry, look: myLook } : null;
+  }, [profile, myCountry, myLook]);
+
+  const homeArea = useMemo(
+    () => (homeCountry ? { country: homeCountry, lng: profile?.home_lng ?? null, lat: profile?.home_lat ?? null } : null),
+    [homeCountry, profile?.home_lng, profile?.home_lat],
+  );
 
   const contactsWithTags = useMemo(
     () => contacts.map((c) => ({ ...c, tag_ids: tagMap[c.id] ?? [] })),
@@ -114,6 +132,9 @@ export function MapPage() {
           focus={focus}
           selected={selected}
           onSelect={select}
+          looks={looks}
+          me={me}
+          home={homeArea}
         />
       )}
       {mapKind === 'globe' && (
@@ -138,7 +159,7 @@ export function MapPage() {
       )}
 
       {panelOpen ? (
-        <div className="map-overlay-left">
+        <div className="map-overlay-left lg lg-thick">
           <div className="overlay-head">
             <strong>Map</strong>
             <button
@@ -184,7 +205,7 @@ export function MapPage() {
         </div>
       ) : (
         <button
-          className="map-overlay-show"
+          className="map-overlay-show lg lg-press"
           onClick={() => setPanelOpen(true)}
           aria-label="Show filters"
         >
@@ -194,8 +215,9 @@ export function MapPage() {
       )}
 
       {selected && (
-        <PointCard point={selected} tags={tags} onClose={() => setSelectedId(null)} />
+        <PointCard point={selected} tags={tags} looks={looks} onClose={() => setSelectedId(null)} />
       )}
+      <BallSetup />
     </div>
   );
 }
@@ -203,10 +225,12 @@ export function MapPage() {
 function PointCard({
   point,
   tags,
+  looks,
   onClose,
 }: {
   point: MapPoint;
   tags: Tag[];
+  looks?: Map<string, import('../features/countryball/look').BallLook>;
   onClose: () => void;
 }) {
   const navigate = useNavigate();
@@ -216,7 +240,7 @@ function PointCard({
     .join(', ');
 
   return (
-    <aside className="point-card">
+    <aside className="point-card lg lg-thick">
       <div className="point-card-head">
         <strong>{place || 'Location'} · {point.count}</strong>
         <button className="x" onClick={onClose}>x</button>
@@ -224,7 +248,8 @@ function PointCard({
       <ul>
         {point.contacts.map((c) => (
           <li key={c.id}>
-            <span className={`dot ${c.category}`} />
+            <CountryBall country={ballCountry(c, point.country)} look={looks?.get(c.id)} size={26} />
+            <span className={`dot ${c.category}`} title={c.category} />
             <span className="pc-name">{c.full_name}</span>
             {(c as Contact & { tag_ids?: string[] }).tag_ids?.map((id) => (
               <span key={id} className="mini-tag">{tagName(id)}</span>

@@ -3,7 +3,7 @@
 
 export type ViewMode = 'cosmopolitan' | 'homelover';
 export type ContactCategory = 'work' | 'private' | 'other';
-export type ContactSource = 'google' | 'csv' | 'manual' | 'linkedin_csv';
+export type ContactSource = 'google' | 'csv' | 'manual' | 'linkedin_csv' | 'invite';
 export type FieldType = 'text' | 'date' | 'number' | 'select' | 'tags' | 'boolean';
 export type LocationType = 'residence' | 'work';
 export type TagKind = 'community' | 'label';
@@ -22,9 +22,27 @@ export interface Profile {
   phone: string | null;
   emails: string[];
   socials: Record<string, string>;
+  /** Carried by the invite link and QR code; replacing it retires both. */
+  share_token: string;
+  /** Parts of the profile on the card handed to linked members. */
+  share_fields: CardField[];
+  home_lng: number | null;
+  home_lat: number | null;
+  /** City-level location: detected in the browser, snapped to a city. */
+  location_enabled: boolean;
+  current_city: string | null;
+  current_country: string | null;
+  current_lng: number | null;
+  current_lat: number | null;
+  /** Countryball look (see features/countryball/look.ts). Absent until the 20261122120000 migration. */
+  avatar?: unknown;
+  location_updated_at: string | null;
+  linkedin_location_consent: boolean;
   created_at: string;
   updated_at: string;
 }
+
+export type CardField = 'phone' | 'emails' | 'socials' | 'home';
 
 /** A repeatable value plus its Google `type` ("home", "work", "mobile", or a custom string). */
 export interface LabeledValue {
@@ -190,4 +208,55 @@ export interface SharedLinkedIn {
   positions: SharedPosition[];
   education: SharedEducation[];
   updated_at: string;
+}
+
+// One of the caller's contacts that is another member (see accept_invite()).
+export interface ContactLink {
+  contact_id: string;
+  peer_id: string;
+}
+
+// A row of linked_locations(): the city a linked member currently shares.
+export interface LinkedLocation {
+  contact_id: string;
+  city: string;
+  country: string | null;
+  lng: number | null;
+  lat: number | null;
+  updated_at: string;
+}
+
+export interface VisitNotice {
+  id: string;
+  from_user: string;
+  to_user: string;
+  from_name: string;
+  city: string | null;
+  country: string | null;
+  date_from: string | null;
+  date_to: string | null;
+  message: string | null;
+  created_at: string;
+  read_at: string | null;
+}
+
+// Another app in the same project, signed into with the same account.
+export interface CommunityApp {
+  slug: string;
+  name: string;
+  tagline: string | null;
+  url: string;
+}
+
+export type FeedbackStatus = 'new' | 'triaged' | 'approved' | 'dispatched' | 'done' | 'wontfix';
+
+export interface Feedback {
+  id: number;
+  app: string;
+  sender_email: string | null;
+  text: string;
+  page: string | null;
+  screenshot_path?: string | null;
+  status: FeedbackStatus;
+  created_at: string;
 }

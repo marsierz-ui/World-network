@@ -3,7 +3,7 @@ import { Map, Source, Layer, type MapLayerMouseEvent, type MapRef } from 'react-
 import type { ExpressionSpecification } from 'maplibre-gl';
 import type { MapPoint } from './useMapData';
 import { useCountryShapes } from './countryShapes';
-import { useBasemap } from '../../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../../lib/basemap';
 import { COUNTRY_BY_CODE } from '../../lib/countries';
 import { useTheme } from '../../lib/theme';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -101,17 +101,21 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
           properties: {
             code: f.properties.code,
             name: f.properties.name,
+            tiny: f.properties.tiny ?? false,
             count: byCountry.get(f.properties.code!)!.count,
           },
         })),
     };
   }, [shapes, byCountry]);
 
-  // Centroids, for the count labels and for the countries the 1:110m outlines
-  // leave out entirely (Singapore, Hong Kong, Malta, Bahrain, Andorra). Those
-  // would silently vanish from a map of where people are, so they get a marker.
+  // Centroids, for the count labels and for countries whose 1:10m outline is
+  // too small to see at world zoom (Singapore, Hong Kong, Malta, Bahrain,
+  // Andorra; flagged `tiny` at build time). Those would silently vanish from a
+  // map of where people are, so they also get a marker.
   const centres = useMemo(() => {
-    const withShape = new Set(filled.features.map((f) => f.properties.code));
+    const withShape = new Set(
+      filled.features.filter((f) => !f.properties.tiny).map((f) => f.properties.code),
+    );
     return {
       type: 'FeatureCollection' as const,
       features: [...byCountry.entries()].flatMap(([code, point]) => {
@@ -149,6 +153,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
 
   return (
     <Map
+      canvasContextAttributes={MAP_CANVAS_CONTEXT}
       ref={mapRef}
       initialViewState={initialView}
       mapStyle={basemap}
@@ -191,7 +196,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
           id="country-selected"
           type="line"
           filter={['==', ['get', 'code'], selected?.country ?? '']}
-          paint={{ 'line-color': '#6366f1', 'line-width': 2.5 }}
+          paint={{ 'line-color': '#3f5bb8', 'line-width': 2.5 }}
         />
       </Source>
 
@@ -225,7 +230,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
       </Source>
 
       {hovered && (
-        <div className="map-hover">
+        <div className="map-hover lg lg-thick">
           {hovered.name}
           <span className="mh-city">
             {hovered.count} {hovered.count === 1 ? 'contact' : 'contacts'}
@@ -234,7 +239,7 @@ export function ChoroplethMap({ byCountry, initialView, focus, selected, onSelec
       )}
 
       {breaks.length > 0 && (
-        <div className="map-scale">
+        <div className="map-scale lg">
           <div className="section-label">Contacts</div>
           <div className="scale-row">
             {breaks.map((b, i) => (

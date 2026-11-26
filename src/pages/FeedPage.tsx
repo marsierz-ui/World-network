@@ -3,7 +3,7 @@ import { Map as MapGL, Marker, Popup } from 'react-map-gl/maplibre';
 import { useContacts } from '../features/contacts/useContacts';
 import { useSocialFeed } from '../features/social/useSocialFeed';
 import type { SocialPost } from '../features/social/socialFeed';
-import { useBasemap } from '../lib/basemap';
+import { MAP_CANVAS_CONTEXT, useBasemap } from '../lib/basemap';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 
@@ -40,6 +40,7 @@ export function FeedPage() {
   return (
     <div className="map-page">
       <MapGL
+        canvasContextAttributes={MAP_CANVAS_CONTEXT}
         initialViewState={{ longitude: 10, latitude: 30, zoom: 1.4 }}
         mapStyle={BASEMAP}
         style={{ position: 'absolute', inset: 0 }}
@@ -89,7 +90,7 @@ export function FeedPage() {
         )}
       </MapGL>
 
-      <div className="map-overlay-left">
+      <div className="map-overlay-left lg lg-thick">
         <strong>Feed</strong>
         <div className="muted feed-stat">
           {connectedCount} connected · {pins.length} on map{unplaced > 0 && ` · ${unplaced} without location`}

@@ -129,7 +129,7 @@ function keysWithPrefix(prefix: string): string[] {
 
 // Optionally enrich with the full GeoNames set generated into /cities.min.json.
 // Safe no-op if the file is absent. Call once at startup.
-export async function loadCityDataset(): Promise<void> {
+async function fetchCityDataset(): Promise<void> {
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}cities.min.json`);
     if (!res.ok) {
@@ -151,6 +151,53 @@ export async function loadCityDataset(): Promise<void> {
   } catch {
     if (!index) buildIndex();
   }
+}
+
+let datasetLoad: Promise<void> | null = null;
+
+// One shared load. Callers that must not settle for the curated table - a
+// lookup that gets stored, the nearest-city search - await it.
+export function loadCityDataset(): Promise<void> {
+  datasetLoad ??= fetchCityDataset();
+  return datasetLoad;
+}
+
+export function distanceKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * The city a position belongs to: the most populous one within 20 km, else the
+ * closest one within 100 km. Preferring the big neighbour over the village the
+ * point happens to fall in is the point - this is what gets stored and shared
+ * in place of the position itself.
+ */
+export function nearestCity(lat: number, lng: number): City | null {
+  if (!index) buildIndex();
+  const here = { lat, lng };
+  let biggest: City | null = null;
+  let closest: City | null = null;
+  let closestKm = 100;
+  for (const c of normNames.keys()) {
+    // Cheap reject before the trigonometry: one degree of latitude is 111 km.
+    if (Math.abs(c.lat - lat) > 1) continue;
+    const km = distanceKm(here, c);
+    if (km < closestKm) {
+      closest = c;
+      closestKm = km;
+    }
+    if (km <= 20 && (c.population ?? 0) > (biggest?.population ?? 0)) biggest = c;
+  }
+  return biggest ?? closest;
 }
 
 /**

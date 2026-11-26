@@ -15,14 +15,14 @@ function readStored(): Theme | null {
 
 // Stored choice wins; otherwise follow the OS.
 function initialTheme(): Theme {
-  return readStored() ?? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  return readStored() ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 }
 
 function apply(theme: Theme) {
   document.documentElement.dataset.theme = theme;
   // Keep the mobile browser/PWA status bar in step with the app background.
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#f7f8fa' : '#0f1115');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f5f4' : '#0d1211');
   try {
     localStorage.setItem(KEY, theme);
   } catch {

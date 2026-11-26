@@ -119,6 +119,20 @@ Deno.serve(async (req) => {
   // Withdraw shared history so other users stop seeing it during the grace period.
   // Ignored on failure: the table only exists where that feature is deployed.
   await admin.from('shared_linkedin').delete().eq('user_id', userId);
+  // Same for the shared city, and retire the invite link so nobody connects to
+  // an account on its way out. Also ignored on failure, for the same reason.
+  await admin
+    .from('profiles')
+    .update({
+      location_enabled: false,
+      current_city: null,
+      current_country: null,
+      current_lng: null,
+      current_lat: null,
+      location_updated_at: null,
+      share_token: crypto.randomUUID(),
+    })
+    .eq('user_id', userId);
 
   return json({ ok: true, purge_after: purgeAfter }, 200, origin);
 });

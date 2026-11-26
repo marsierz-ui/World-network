@@ -23,7 +23,7 @@
 <main>
   <p><a href="./">Back to World Network</a></p>
   <h1>Privacy Policy</h1>
-  <p class="muted">World Network - Last updated 25 October 2026</p>
+  <p class="muted">World Network - Last updated 14 November 2026</p>
 
   <p>World Network ("the app") puts your contacts on a map of the world. It is a personal project run by marsierz-ui ("we", "us"). This policy explains what data the app handles, why, who else sees it, and how you can remove it. Contact: <a href="mailto:marsierz@gmail.com">marsierz@gmail.com</a>.</p>
 
@@ -34,6 +34,9 @@
     <tr><td>Your contacts: names, emails, phone numbers, postal addresses, organizations, birthdays, notes, websites, labels, and similar fields</td><td>Your Google Contacts (only if you connect Google), a CSV or LinkedIn file you import, or what you type in.</td></tr>
     <tr><td>Places: the city and country of each contact, and coordinates worked out from them</td><td>Your contact data, or what you enter.</td></tr>
     <tr><td>Your profile: display name, home city and country, languages, optional phone, emails and social profile links</td><td>What you enter in Settings.</td></tr>
+    <tr><td>The city you are in (optional, off by default)</td><td>Your browser's location, only if you switch this on in Settings. Your device works out the nearest city and only that city is saved. We never receive or store your exact position, and we keep no history of where you were.</td></tr>
+    <tr><td>Connections with other members, and visit notices you send or receive</td><td>Created when you accept an invite or send a notice.</td></tr>
+    <tr><td>Feedback you send, with the page you were on and your browser type</td><td>The Feedback form.</td></tr>
     <tr><td>A Google refresh token</td><td>Google, when you grant access. Kept on our server only, never in your browser.</td></tr>
     <tr><td>A log of contacts added and removed</td><td>Created by the app, so a contact you deleted is not silently re-imported.</td></tr>
     <tr><td>Optional LinkedIn data</td><td>Only if you use the LinkedIn import and paste your own access token.</td></tr>
@@ -50,14 +53,17 @@
   <p>World Network's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 
   <h2>Who else sees your data</h2>
-  <p>Your data is private to your account. Other people cannot see your contacts. The one exception is something you switch on yourself:</p>
+  <p>Your data is private to your account. Other people cannot see your contacts. The exceptions are things you do or switch on yourself:</p>
   <ul>
+    <li><strong>Your card.</strong> When you share your invite link or QR code and someone accepts it, or you accept theirs, you swap cards: each of you is added to the other's contacts. Your card holds your name and the parts of your profile you ticked under My card (phone, email addresses, social profiles, home city). Replacing your invite link stops new people from using the old one. Disconnecting ends the connection; the contact details already handed over stay with the other person, as they would with a paper card.</li>
+    <li><strong>Your current city (optional, off by default).</strong> If you switch on city location, members you are connected with can see which city you are in. Switching it off deletes the saved city.</li>
+    <li><strong>Visit notices.</strong> When you tell connected members that you are visiting, they see your name, the city, the dates and your message. Messages to people who are not members are sent by you, from your own email or messaging app; we do not send them and do not see them.</li>
     <li><strong>Shared LinkedIn history (optional, off by default).</strong> If you choose to share your job and education history, other app users who already have you as a contact can see it on that contact. They are matched by your email, phone or LinkedIn address. Turning sharing off, or deleting your account, removes it.</li>
   </ul>
   <p>Service providers that process data on our behalf:</p>
   <ul>
     <li><strong>Supabase</strong> - database, sign-in and server functions. Hosted in the EU (Paris).</li>
-    <li><strong>GitHub Pages</strong> - serves the website. It sees your IP address like any web host.</li>
+    <li><strong>GitHub Pages or Railway</strong> - serves the website. It sees your IP address like any web host.</li>
     <li><strong>Google</strong> - sign-in and the People API.</li>
     <li><strong>CARTO</strong> - map tiles. Your browser requests them directly, so CARTO sees your IP address and the area of the map you view, but none of your contacts.</li>
     <li><strong>LinkedIn</strong> - only if you use the LinkedIn import. Your token passes through our server to LinkedIn and is not stored.</li>
@@ -68,7 +74,7 @@
   <p>Data is stored in a Supabase database where every table is restricted by row-level security, so a signed-in user can only reach their own rows. The Google refresh token sits in a table that no user-facing request can read. Connections use HTTPS. No system is perfectly secure, and we cannot promise absolute security.</p>
 
   <h2>Your browser</h2>
-  <p>The app stores your sign-in session and your light or dark theme choice in your browser's local storage, and a short-lived Google access token in session storage for the current tab. These are needed for the app to work. Clearing site data signs you out.</p>
+  <p>The app stores your sign-in session, your light or dark theme choice, an invite you opened but have not answered yet, and which arrival notice you dismissed in your browser's local storage, and a short-lived Google access token in session storage for the current tab. These are needed for the app to work. Clearing site data signs you out.</p>
 
   <h2>Keeping and deleting your data</h2>
   <ul>

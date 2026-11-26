@@ -52,6 +52,26 @@ export function useImportLinkedInSelf() {
       const headline = pick(profile, 'headline');
       const current = geo ? parsePlace(geo) : { city: null, country: null, lng: null, lat: null };
 
+      // Only with the consent given in Settings: LinkedIn's location becomes the
+      // home city, which the card and the visit alerts are built on.
+      if (current.lng != null) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('linkedin_location_consent')
+          .single();
+        if ((prof as { linkedin_location_consent: boolean } | null)?.linkedin_location_consent) {
+          await supabase
+            .from('profiles')
+            .update({
+              home_city: current.city,
+              home_country: current.country,
+              home_lng: current.lng,
+              home_lat: current.lat,
+            })
+            .eq('user_id', userId);
+        }
+      }
+
       // Find or create the self contact (custom.self = true).
       const { data: existing } = await supabase
         .from('contacts')

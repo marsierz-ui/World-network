@@ -4,7 +4,7 @@ import type { MultiPolygon, Polygon } from 'geojson';
 /** One country outline, keyed by ISO 3166-1 alpha-2 (null for disputed areas). */
 export interface CountryFeature {
   type: 'Feature';
-  properties: { code: string | null; name: string };
+  properties: { code: string | null; name: string; tiny?: boolean };
   geometry: Polygon | MultiPolygon;
 }
 
@@ -13,7 +13,7 @@ export interface CountryShapes {
   features: CountryFeature[];
 }
 
-// 160KB of outlines, needed only by the choropleth view. Fetched the first time
+// ~1.1MB (~400KB gzipped) of 1:10m outlines, needed only by the choropleth view. Fetched the first time
 // that view is opened and kept for the session; the flat and globe maps never
 // pay for it. See scripts/build-countries.mjs.
 let cache: Promise<CountryShapes> | null = null;

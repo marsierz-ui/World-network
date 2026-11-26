@@ -5,9 +5,15 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './features/auth/AuthProvider';
 import { App } from './App';
 import { loadCityDataset } from './lib/geocode';
+import { captureInvite } from './features/card/invite';
 // Imported for its side effect: paints the stored theme before React mounts.
 import './lib/theme';
+// Shared xTrails Liquid Glass material; index.css tunes it (--lg-* tokens) after.
+import './components/liquid-glass.css';
+import './components/liquid-glass.js';
 import './index.css';
+
+captureInvite();
 
 // Enrich geocoder with the full GeoNames set if scripts/build-cities.mjs was run.
 void loadCityDataset();
